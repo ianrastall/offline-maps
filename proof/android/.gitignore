@@ -1,0 +1,6 @@
+.gradle/
+build/
+local.properties
+# Made by prepare.ps1: the Rust libraries and the copied map page and overview.
+app/src/main/jniLibs/
+app/src/main/assets/

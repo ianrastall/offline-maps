@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/offline-maps-core", "crates/offline-maps-dev", "crates/offline-maps-ffi"]
+members = ["crates/offline-maps-core", "crates/offline-maps-dev", "crates/offline-maps-ffi", "crates/offline-maps-android"]
 resolver = "3"
 
 [workspace.package]

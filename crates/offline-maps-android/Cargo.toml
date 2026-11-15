@@ -1,0 +1,17 @@
+[package]
+name = "offline-maps-android"
+description = "JNI bridge from the Android app to the Offline Maps core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+name = "offline_maps_android"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+offline-maps-ffi = { path = "../offline-maps-ffi" }
+jni = "0.22.4"
+serde_json = "1.0.154"

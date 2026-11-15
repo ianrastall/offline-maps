@@ -38,6 +38,7 @@ Planned: region maps and processed stations and addresses published in this repo
 - [Worldwide plan](docs/worldwide.md) (proposed 14 November 2026)
 - [Sources and technical decisions](docs/sources-and-architecture.md)
 - [Renderer proof and decision](docs/renderer-proof.md)
+- [Android renderer proof](docs/android-renderer-proof.md) (15 November 2026)
 - [Implementation stages and verification](docs/validation.md)
 - [Jupiter conformance](docs/jupiter-exceptions.md)
 
