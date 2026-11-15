@@ -15,6 +15,7 @@ pub mod relocate;
 pub mod search;
 pub mod store;
 pub mod terrain;
+pub mod terrain_sources;
 pub mod time;
 
 use std::io::{self, Read, Write};

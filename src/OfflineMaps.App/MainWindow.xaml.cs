@@ -451,6 +451,7 @@ public sealed partial class MainWindow : Window
                 : "Flood zones and public lands: not installed");
             lines.Add(region.Terrain is { } terrain
                 ? $"Terrain: downloaded {Format.Date(terrain.DownloadedAt)}, {Format.Megabytes(terrain.Bytes)}, {terrain.Tiles:N0} tiles to zoom {terrain.MaxZoom}"
+                    + (terrain.Sources.Count > 0 ? $"; elevation data from {Format.TerrainSources(terrain.Sources)}" : "")
                 : "Terrain: not installed");
             if (region.Problem.Length > 0)
             {
@@ -460,9 +461,20 @@ public sealed partial class MainWindow : Window
         }
         Row("Map folder", status.StoreDirectory);
         Row("Attribution", "Map data © OpenStreetMap contributors, available under the Open Database License (ODbL). Map package and extracts by Geofabrik."
-            + (AppPaths.HasOverview ? " The overview of the United States and Mexico is from Natural Earth (naturalearthdata.com), public domain." : "")
+            + (AppPaths.HasOverview ? " The world overview is from Natural Earth (naturalearthdata.com), public domain." : "")
             + (status.OverlayCoverage is null ? "" : " Flood zones from the FEMA National Flood Hazard Layer and public lands from the USGS Protected Areas Database (PAD-US), both public domain.")
-            + (status.TerrainCoverage is null ? "" : " Terrain from Mapterhorn (mapterhorn.com/attribution): USGS 3D Elevation Program (public domain) and Copernicus GLO-30, © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA."));
+            + (status.TerrainCoverage is null ? "" : " Terrain from Mapterhorn (mapterhorn.com/attribution), made from the elevation data listed under Terrain sources."));
+        // Each installed terrain's producers and licences, once each.
+        var terrainSources = status.Regions
+            .Where(r => r.Terrain is not null)
+            .SelectMany(r => r.Terrain.Sources)
+            .Select(Format.TerrainSource)
+            .Distinct()
+            .ToList();
+        if (terrainSources.Count > 0)
+        {
+            Row("Terrain sources", string.Join(Environment.NewLine, terrainSources));
+        }
         if (status.OverlayCoverage is not null)
         {
             Row("Flood zones", "Dark blue: floodway. Blue: 1% annual chance (the \"100-year\" special flood hazard area). Light blue: 0.2% annual chance, or 1% with depths under a foot. Grey-blue: reduced risk behind a levee.");

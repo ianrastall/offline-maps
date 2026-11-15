@@ -175,6 +175,17 @@ fn downloads_the_area_and_serves_its_tiles() {
     assert_eq!(terrain.record.tiles, 4);
     assert_eq!(terrain.record.max_zoom, 2);
     assert_eq!(terrain.record.source.etag.as_deref(), Some("\"v1\""));
+    // The credit names the region's own sources.
+    assert_eq!(
+        terrain.record.attribution,
+        crate::terrain_sources::attribution("us-il")
+    );
+    assert!(
+        terrain
+            .record
+            .attribution
+            .contains("U.S. Geological Survey")
+    );
     assert!(matches!(reports.last(), Some(Progress::Activating)));
     assert!(reports.iter().any(|p| matches!(
         p,

@@ -114,6 +114,19 @@ internal static class Format
         };
     }
 
+    /// <summary>The producers of a terrain's elevation data by short name: "USGS and Copernicus"; past seven, the first six and how many more.</summary>
+    public static string TerrainSources(IEnumerable<OfflineMaps.Interop.Messages.TerrainSource> sources)
+    {
+        var names = sources.Select(s => s.ShortName).Distinct().ToList();
+        return names.Count > 7
+            ? $"{string.Join(", ", names.Take(6))} and {names.Count - 6} more"
+            : List(names);
+    }
+
+    /// <summary>A terrain source in full: its producer and its licence.</summary>
+    public static string TerrainSource(OfflineMaps.Interop.Messages.TerrainSource source) =>
+        $"{source.Producer.TrimEnd('.')}. {source.License}.";
+
     public static string Distance(double km, bool kilometres)
     {
         double value = kilometres ? km : km * 0.621371;

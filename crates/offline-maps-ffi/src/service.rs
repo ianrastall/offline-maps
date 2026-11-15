@@ -189,6 +189,20 @@ fn bounds_message(b: Bounds) -> pb::Bounds {
     }
 }
 
+/// Whose elevation data a region's terrain is made from.
+fn terrain_source_messages(region_id: &str) -> Vec<pb::TerrainSource> {
+    offline_maps_core::terrain_sources::for_region(region_id)
+        .into_iter()
+        .map(|s| pb::TerrainSource {
+            short_name: s.short.to_owned(),
+            producer: s.producer.to_owned(),
+            license: s.license.to_owned(),
+            website: s.website.to_owned(),
+            notice: s.notice.to_owned(),
+        })
+        .collect()
+}
+
 fn overlaps(a: &Bounds, b: &Bounds) -> bool {
     a.west <= b.east && b.west <= a.east && a.south <= b.north && b.south <= a.north
 }
@@ -439,6 +453,7 @@ impl Service {
                     country: r.country.to_owned(),
                     continent: r.continent.to_owned(),
                     note: r.note.to_owned(),
+                    terrain_sources: terrain_source_messages(r.id),
                 })
                 .collect(),
         }
@@ -514,6 +529,8 @@ impl Service {
                     tiles: r.tiles,
                     max_zoom: r.max_zoom.into(),
                     attribution: r.attribution.clone(),
+                    sources: terrain_source_messages(slot.region.id),
+                    bounds: Some(bounds_message(r.bounds)),
                 }
             });
             let overlays = slot.overlays.as_ref().map(|o| {

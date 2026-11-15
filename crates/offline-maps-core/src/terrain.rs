@@ -37,7 +37,6 @@ use crate::store::{PackageStore, RECORD_FILE, is_version_name, write_atomic};
 pub const TERRAIN_URL: &str = "https://download.mapterhorn.com/planet.pmtiles";
 pub const TERRAIN_MAX_ZOOM: u8 = 12;
 pub const TERRAIN_FILE: &str = "terrain.mbtiles";
-pub const TERRAIN_ATTRIBUTION: &str = "Terrain: Mapterhorn (mapterhorn.com/attribution), including USGS 3DEP and Copernicus GLO-30 (© DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA)";
 const RECORD_SCHEMA: u32 = 1;
 /// Tiles closer than this in the archive are fetched in one request.
 const MAX_GAP: u64 = 512 << 10;
@@ -447,6 +446,8 @@ pub fn update_terrain(
         ))));
     }
     let downloaded_at = (options.clock)();
+    // Whose elevation data the region's tiles are made from.
+    let attribution = crate::terrain_sources::attribution(region.id);
     {
         let tx = db.transaction().map_err(storage)?;
         for (name, value) in [
@@ -462,7 +463,7 @@ pub fn update_terrain(
                     bounds.west, bounds.south, bounds.east, bounds.north
                 ),
             ),
-            ("attribution", TERRAIN_ATTRIBUTION.into()),
+            ("attribution", attribution.clone()),
         ] {
             tx.execute(
                 "INSERT OR REPLACE INTO metadata (name, value) VALUES (?1, ?2)",
@@ -490,7 +491,7 @@ pub fn update_terrain(
         tiles,
         bytes: total,
         downloaded_at: downloaded_at.clone(),
-        attribution: TERRAIN_ATTRIBUTION.to_owned(),
+        attribution,
     };
     let stamp: String = downloaded_at
         .chars()

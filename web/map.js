@@ -37,7 +37,9 @@ let placeMarkers = [];
 let metadata = null;
 let scale = null;
 let units = 'imperial';
-// { bounds } of the installed terrain, or null; and what is shown of it.
+// { bounds, credits } of the installed terrain, or null; and what is shown of
+// it. Credits: each region's terrain box and whose elevation data it is made
+// from ({ bounds: [west, south, east, north], sources: [{ short, detail, notice }] }).
 let terrain = null;
 let shading = true;
 let contours = true;
@@ -50,8 +52,11 @@ const TERRAIN_BEFORE = 'water-river';
 // railways and paths, which would otherwise cut through the text.
 const LABELS_BEFORE = 'label-address-housenumber';
 const labelsBefore = () => (map.getLayer(LABELS_BEFORE) ? LABELS_BEFORE : undefined);
-// Short credit on the map; the full one is in Map information.
-const TERRAIN_CREDIT = 'Terrain: <span title="Mapterhorn: USGS 3DEP, Copernicus GLO-30 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018 provided under COPERNICUS by the European Union and ESA">Mapterhorn, USGS, Copernicus</span>';
+// The credits line; replaced when the terrain credit changes.
+let attributionControl = null;
+let creditShown = null;
+// Short names shown in the terrain credit before "and N more".
+const TERRAIN_CREDIT_NAMES = 6;
 const TERRAIN_LAYERS = ['terrain-shading', 'contour-lines', 'contour-labels'];
 // Contour spacing by zoom: [minor, major] in feet or metres.
 const CONTOUR_FEET = { 10: [200, 1000], 11: [100, 500], 12: [50, 250], 14: [20, 100], 16: [10, 50] };
@@ -210,10 +215,8 @@ function applyTerrain() {
     tileSize: 512,
     maxzoom: 12,
     bounds,
-    attribution: TERRAIN_CREDIT,
   });
-  // The credit is on both sources, so it shows while either layer is visible.
-  map.addSource('contours', { type: 'vector', tiles: [contourUrl()], maxzoom: 15, bounds, attribution: TERRAIN_CREDIT });
+  map.addSource('contours', { type: 'vector', tiles: [contourUrl()], maxzoom: 15, bounds });
   map.addLayer({
     id: 'terrain-shading',
     type: 'hillshade',
@@ -264,6 +267,56 @@ function setTerrainVisibility() {
   show('terrain-shading', shading);
   show('contour-lines', contours);
   show('contour-labels', contours);
+  updateCredit();
+}
+
+const escapeHtml = (text) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+// Whether a [west, south, east, north] box touches the area in view.
+function inView(box, view) {
+  const [west, south, east, north] = box;
+  if (south > view.getNorth() || north < view.getSouth()) return false;
+  if (view.getEast() - view.getWest() >= 360) return true;
+  // A view across the 180th meridian is two spans.
+  const wrap = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
+  const [left, right] = [wrap(view.getWest()), wrap(view.getEast())];
+  return left <= right ? west <= right && east >= left : west <= right || east >= left;
+}
+
+// The terrain credit for the area in view: Mapterhorn and the producers of the
+// elevation data of the regions there, by short name, with their full names
+// and licences as a tooltip (Map information lists them too). Words a licence
+// wants on the map itself (Japan's survey approval number) are written out.
+// Empty when no terrain is drawn in view.
+function terrainCredit() {
+  if (!terrain || !(shading || contours)) return '';
+  const view = map.getBounds();
+  const regions = (terrain.credits ?? []).filter((region) => inView(region.bounds, view));
+  if (!regions.length) return '';
+  const names = new Map();
+  const details = new Set();
+  for (const source of regions.flatMap((region) => region.sources)) {
+    if (!names.has(source.short) || source.notice) names.set(source.short, source.notice || names.get(source.short) || '');
+    details.add(source.detail);
+  }
+  // Sources with words for the map come first, so they are never cut.
+  const sorted = [...names].sort((a, b) => Boolean(b[1]) - Boolean(a[1]));
+  const shown = sorted.length > TERRAIN_CREDIT_NAMES + 1 ? sorted.slice(0, TERRAIN_CREDIT_NAMES) : sorted;
+  const text = ['Mapterhorn', ...shown.map(([short, notice]) => (notice ? `${short} (${notice})` : short))].join(', ')
+    + (shown.length < sorted.length ? ` and ${sorted.length - shown.length} more` : '');
+  const title = ['Mapterhorn (mapterhorn.com/attribution), from:', ...details].map(escapeHtml).join('&#10;');
+  return `Terrain: <span title="${title}">${escapeHtml(text)}</span>`;
+}
+
+// Shows the credits line with the terrain credit for the area in view.
+function updateCredit() {
+  if (!map) return;
+  const credit = terrainCredit();
+  if (attributionControl && credit === creditShown) return;
+  if (attributionControl) map.removeControl(attributionControl);
+  attributionControl = new maplibregl.AttributionControl({ compact: false, customAttribution: credit || undefined });
+  map.addControl(attributionControl);
+  creditShown = credit;
 }
 
 // Outdoor places (map content colors): a disc with a white symbol.
@@ -675,12 +728,15 @@ async function init(message) {
     minZoom: Math.max(0, metadata.minZoom),
     maxZoom: 19,
     maxBounds: maxBounds(),
-    attributionControl: { compact: false },
+    // Added by updateCredit, which rebuilds it when the terrain credit changes.
+    attributionControl: false,
     pitchWithRotate: false,
     dragRotate: false,
     touchPitch: false,
   });
   map.touchZoomRotate.disableRotation();
+  attributionControl = null;
+  updateCredit();
   setUnits(message.units);
   map.getCanvas().setAttribute('aria-label', 'Map. Arrow keys move, plus and minus zoom.');
   map.on('style.load', () => {
@@ -692,6 +748,7 @@ async function init(message) {
     applyOverview();
     applyOverlays();
     applyTerrain();
+    updateCredit();
   });
   map.on('styleimagemissing', ({ id }) => {
     if (id === 'station-charging') addChargingIcon();
@@ -699,6 +756,7 @@ async function init(message) {
     else addShield(id);
   });
   map.on('moveend', reportView);
+  map.on('moveend', updateCredit);
   map.on('error', (e) => {
     const message = String(e.error?.message ?? e.error ?? e);
     // Inside the box around installed terrain, tiles no region's terrain

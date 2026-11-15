@@ -341,6 +341,28 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.17.0: Terrain credits by region
+
+Completed 14 November 2026: stage W5 of the [worldwide plan](worldwide.md).
+
+- **Source table.** `offline-maps-dev terrain-sources` reads Mapterhorn's coverage index (1.6 MB, of 14 September 2026) and writes whose elevation data each of the 540 regions' terrain is made from: 70 producers and licences, one to 19 per region. Illinois: USGS and Copernicus. Washington and British Columbia: USGS, NRCan and Copernicus. Japan's regions: GSI and Copernicus. Luxembourg: eight (its own survey, France's, Wallonia's, Flanders', three German states' and Copernicus). 189 regions have Copernicus alone. Running the tool twice gives the same file.
+- **Boxes.** A region's sources are those of the zoom 12 tiles touching its outer box. The first run gave Russia's Far East and Alaska 62 and 38 sources: the 12 parts of regions cut at the 180th meridian have an outer box as wide as the world. For those the tool takes the outline's box from the catalog's required points; Alaska then has USGS, NRCan and Copernicus.
+- **On the map.** The credits line names Mapterhorn and the producers of the terrain in view, by short name, with their full names and licences as a tooltip, and changes when the map moves to another region's terrain. With more than seven producers it names six and counts the rest. It shows no terrain credit where no terrain is in view or while shading and contour lines are both off.
+- **Japan.** GSI's terms were read ([worldwide plan](worldwide.md#licensing)): a product made under a Survey Act approval may be used without a further application, with the approval number shown with the map. The credits line writes it out: "GSI (測量法に基づく国土地理院長承認（使用）R 8JHs 131)".
+- **Windows.** Map information gives each installed terrain's producers on its line and a Terrain sources row with every producer and licence; its attribution text no longer calls the overview one of the United States and Mexico. The Regions window names a region's producers before and after its terrain is downloaded.
+- **Record and notices.** A downloaded terrain's record and file metadata carry the region's own credit. `THIRD-PARTY-NOTICES.txt` lists all 70 sources with their licences and pages.
+- **Layout.** A long credits line wrapped across the whole width and covered the scale bar; it now keeps 140 pixels clear at the left.
+- **Dev tool.** `offline-maps-dev download <store> --region ID --terrain 1` downloads a region's terrain into a test store.
+- **Tests.** 85 core (new: every region has sources; sources follow the region; the terrain record's credit), 2 HTTP, 7 ABI (Illinois with USGS, Hokkaido with GSI and its notice) and 9 interop tests.
+
+Checked with real data in a separate store (`offline-maps-dev download --region ad` and `--region jp-shikoku`, each then with `--terrain 1`; the built app started with `--store` and `--settings` in scratch folders, Ian's data untouched):
+- Credits line with both regions in view: "Terrain: Mapterhorn, GSI (測量法に基づく国土地理院長承認（使用）R 8JHs 131), IGN, scne.es, Copernicus". Over Andorra: "Terrain: Mapterhorn, IGN, scne.es, Copernicus". Over Shikoku: "Terrain: Mapterhorn, GSI (測量法に基づく国土地理院長承認（使用）R 8JHs 131), Copernicus". With shading and contour lines off, or away from both regions: no terrain credit. With contour lines alone: the credit.
+- Over Shikoku in a 716-pixel-wide map the credits line starts 140 pixels from the left and the scale bar ends at 61.
+- Map information: "Terrain: downloaded 14 November 2026, 110 MB, 1,907 tiles to zoom 12; elevation data from GSI and Copernicus", and under Terrain sources five lines, among them "国土交通省国土地理院. 国土地理院コンテンツ利用規約／測量法に基づく国土地理院長承認（使用）R 8JHs 131."
+- Regions window: Andorra "Terrain: downloaded 14 November 2026, 6 MB, elevation data from IGN, scne.es and Copernicus."; Austria, not installed, "About 564 MB from Mapterhorn (elevation data from Kanton Zürich, LGL, swisstopo, ARSO, BEV, LDBV and 13 more)".
+
+Not checked: the tooltip's appearance (its text was read from the page), and the light theme.
+
 ## 0.16.0: Labels and search in other scripts
 
 Completed 14 November 2026: stage W4 of the [worldwide plan](worldwide.md), started by Ian.

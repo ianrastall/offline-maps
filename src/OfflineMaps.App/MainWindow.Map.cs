@@ -349,7 +349,11 @@ public sealed partial class MainWindow
             ["animate"] = UiSettings.AnimationsEnabled,
             ["units"] = _settings.Kilometres ? "metric" : "imperial",
             ["terrain"] = status.TerrainCoverage is { } t
-                ? new JsonObject { ["bounds"] = new JsonObject { ["west"] = t.West, ["south"] = t.South, ["east"] = t.East, ["north"] = t.North } }
+                ? new JsonObject
+                {
+                    ["bounds"] = new JsonObject { ["west"] = t.West, ["south"] = t.South, ["east"] = t.East, ["north"] = t.North },
+                    ["credits"] = TerrainCredits(status),
+                }
                 : null,
             ["outdoor"] = _settings.OutdoorPlaces,
             ["overlays"] = status.OverlayCoverage is { } o
@@ -376,6 +380,35 @@ public sealed partial class MainWindow
         MapMessage.Visibility = Visibility.Collapsed;
         PostPlaces();
         UpdatePlaceCommands();
+    }
+
+    /// <summary>Each installed terrain's box and whose elevation data it is made from, for the map's credit line.</summary>
+    private static JsonArray TerrainCredits(Status status)
+    {
+        var credits = new JsonArray();
+        foreach (var region in status.Regions)
+        {
+            if (region.Terrain is not { Bounds: { } b } terrain)
+            {
+                continue;
+            }
+            var sources = new JsonArray();
+            foreach (var source in terrain.Sources)
+            {
+                sources.Add(new JsonObject
+                {
+                    ["short"] = source.ShortName,
+                    ["detail"] = $"{source.Producer.TrimEnd('.')} ({source.License})",
+                    ["notice"] = source.Notice,
+                });
+            }
+            credits.Add(new JsonObject
+            {
+                ["bounds"] = new JsonArray(b.West, b.South, b.East, b.North),
+                ["sources"] = sources,
+            });
+        }
+        return credits;
     }
 
     private void PostPlaces()

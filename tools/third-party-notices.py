@@ -1,8 +1,9 @@
 """Writes assets/notices/THIRD-PARTY-NOTICES.txt for the installed app.
 
 Collects the MapLibre license, the VersaTiles style notice, the font and icon licenses,
-the Rust crates linked into offline_maps_ffi.dll (from `cargo tree`) and the .NET
-packages. Run after changing dependencies: python tools/third-party-notices.py
+the Rust crates linked into offline_maps_ffi.dll (from `cargo tree`), the .NET
+packages and the terrain sources (assets/notices/terrain-sources.txt). Run after
+changing dependencies or the terrain sources: python tools/third-party-notices.py
 """
 import re
 import subprocess
@@ -116,6 +117,8 @@ def main() -> None:
     maplibre = (ROOT / "proof/renderer/node_modules/maplibre-gl/LICENSE.txt").read_text(encoding="utf-8")
     contour = (ROOT / "proof/renderer/node_modules/maplibre-contour/LICENSE").read_text(encoding="utf-8")
     rtl = (ROOT / "proof/renderer/node_modules/@mapbox/mapbox-gl-rtl-text/LICENSE.md").read_text(encoding="utf-8")
+    # Written by `offline-maps-dev terrain-sources` with the core's table.
+    terrain_sources = (ROOT / "assets/notices/terrain-sources.txt").read_text(encoding="utf-8")
     versatiles = (ROOT / "assets/styles/NOTICE.md").read_text(encoding="utf-8")
     versatiles = versatiles.replace("```text\n", "").replace("```", "")
     sections = [
@@ -125,15 +128,16 @@ def main() -> None:
         "Map data is not part of the program: it is "
         "downloaded by the person using it from Geofabrik and is (c) OpenStreetMap contributors, "
         "available under the Open Database License (ODbL) 1.0, https://www.openstreetmap.org/copyright. "
-        "Terrain, when downloaded, comes from Mapterhorn (https://mapterhorn.com/attribution): the USGS "
-        "3D Elevation Program in the United States (public domain) and Copernicus GLO-30 "
-        "((c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space GmbH 2014-2018, provided under "
-        "COPERNICUS by the European Union and ESA; all rights reserved). Flood zones and public lands, "
+        "Terrain, when downloaded, comes from Mapterhorn (https://mapterhorn.com/attribution), which "
+        "makes it from national elevation models and Copernicus GLO-30. They are listed with their "
+        "licences under Terrain sources below, and Map information in the app lists those of the "
+        "installed terrain. Flood zones and public lands, "
         "when downloaded, are prepared from FEMA's National Flood Hazard Layer and the USGS Protected "
         "Areas Database of the United States (PAD-US), US Government works in the public domain. "
         "The built-in world overview is made from Natural Earth (naturalearthdata.com), "
         "public domain.",
         "MapLibre GL JS 6.16.0 (map renderer)\n\n" + maplibre.strip(),
+        "Terrain sources\n\n" + terrain_sources.strip(),
         "maplibre-contour 0.1.1 (contour lines from terrain)\n\n" + contour.strip(),
         "mapbox-gl-rtl-text 0.3.0 (right-to-left and Arabic labels; contains code derived from ICU)\n\n" + rtl.strip(),
         versatiles.strip().lstrip("# "),

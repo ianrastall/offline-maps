@@ -324,11 +324,11 @@ public sealed partial class RegionsWindow : Window
         }
         if (installed?.Terrain is { } terrain)
         {
-            lines.Add($"Terrain: downloaded {Format.Date(terrain.DownloadedAt)}, {Format.Megabytes(terrain.Bytes)}. Shown as shading and contour lines (View menu)." + CheckText(item.Id, UpdateTarget.Terrain));
+            lines.Add($"Terrain: downloaded {Format.Date(terrain.DownloadedAt)}, {Format.Megabytes(terrain.Bytes)}{(terrain.Sources.Count > 0 ? $", elevation data from {Format.TerrainSources(terrain.Sources)}" : "")}. Shown as shading and contour lines (View menu)." + CheckText(item.Id, UpdateTarget.Terrain));
         }
         else
         {
-            lines.Add($"Terrain: not installed. About {Format.Megabytes(r.TerrainBytes)} from Mapterhorn, for shading and contour lines; needs the map first.");
+            lines.Add($"Terrain: not installed. About {Format.Megabytes(r.TerrainBytes)} from Mapterhorn{(r.TerrainSources.Count > 0 ? $" (elevation data from {Format.TerrainSources(r.TerrainSources)})" : "")}, for shading and contour lines; needs the map first.");
         }
         if (installed is { Problem.Length: > 0 })
         {
@@ -373,7 +373,7 @@ public sealed partial class RegionsWindow : Window
             (true, false) => $"Map built for Offline Maps from Geofabrik's OpenStreetMap extract and published with its releases ({r.SourcePage}); stations and addresses from Geofabrik",
             _ => $"Map, stations and addresses from Geofabrik ({r.SourcePage})",
         };
-        SourceText.Text = $"{source}; map data © OpenStreetMap contributors (ODbL). Terrain from Mapterhorn (download.mapterhorn.com), from national elevation models and Copernicus GLO-30 (sources at mapterhorn.com/attribution). Sizes are as of November 2026.";
+        SourceText.Text = $"{source}; map data © OpenStreetMap contributors (ODbL). Terrain from Mapterhorn (download.mapterhorn.com), made from national elevation models and Copernicus GLO-30; Map information lists the producers and licences of installed terrain, and mapterhorn.com/attribution lists them all. Sizes are as of November 2026.";
     }
 
     /// <summary>

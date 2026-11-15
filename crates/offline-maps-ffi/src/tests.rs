@@ -102,6 +102,31 @@ fn empty_store_reports_no_map_and_refuses_search() {
     assert_eq!(illinois.name, "Illinois");
     assert!(illinois.package_bytes > 100_000_000);
     assert!(illinois.terrain_bytes > 100_000_000);
+    // Terrain credits follow the region: the US survey here, Japan's with the
+    // approval number its terms want shown on the map.
+    assert!(
+        illinois
+            .terrain_sources
+            .iter()
+            .any(|s| s.short_name == "USGS" && s.notice.is_empty())
+    );
+    let hokkaido = catalog
+        .regions
+        .iter()
+        .find(|r| r.id == "jp-hokkaido")
+        .unwrap();
+    assert!(
+        hokkaido
+            .terrain_sources
+            .iter()
+            .any(|s| s.short_name == "GSI" && s.notice.contains("承認"))
+    );
+    assert!(
+        !hokkaido
+            .terrain_sources
+            .iter()
+            .any(|s| s.short_name == "USGS")
+    );
 
     // No terrain installed: an empty tile; terrain needs the region's map first.
     let tile = call(

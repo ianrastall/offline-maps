@@ -5,7 +5,9 @@
 //!   offline-maps-dev serve <package.mbtiles> [--port 8765] [--extras extras.sqlite]
 //!       [--source-pbf file.osm.pbf]
 //!   offline-maps-dev download <store-dir> [--url U] [--region ID] [--stop-after BYTES]
-//!       (--region downloads a catalog region with its own checks, such as fj-e)
+//!       [--terrain 1]
+//!       (--region downloads a catalog region with its own checks, such as fj-e;
+//!       --terrain downloads the terrain of a region whose map is installed)
 //!   offline-maps-dev download-extras <store-dir> [--url U] [--stop-after BYTES]
 //!   offline-maps-dev probe [url]      (HEAD request only; downloads nothing)
 //!   offline-maps-dev index <package.mbtiles> <search.sqlite>
@@ -15,6 +17,10 @@
 //!   offline-maps-dev extract <file.osm.pbf> <extras.sqlite>
 //!   offline-maps-dev terrain-size <west> <south> <east> <north>
 //!       (reads only Mapterhorn's index; prints tiles and bytes at zoom 0-12)
+//!   offline-maps-dev terrain-sources <terrain_sources_data.rs> <terrain-sources.txt>
+//!       (writes each catalog region's terrain sources from Mapterhorn's coverage
+//!       index: the core's table and the list for the third-party notices; then
+//!       cargo fmt and python tools/third-party-notices.py)
 //!
 //! `serve` binds 127.0.0.1 only and stands in for the WebView2 request
 //! interception the app will use: tiles come from the Rust core, every
@@ -25,6 +31,7 @@ use std::process::ExitCode;
 use std::sync::atomic::AtomicBool;
 
 mod server;
+mod terrain_sources;
 
 use offline_maps_core::package::{ILLINOIS, SourceInfo, verify_package};
 
@@ -268,6 +275,7 @@ fn main() -> ExitCode {
         Some("search") => search(&args[1..]),
         Some("extract") => extract(&args[1..]),
         Some("terrain-size") => terrain_size(&args[1..]),
+        Some("terrain-sources") => terrain_sources::run(&args[1..]),
         _ => Err("usage: offline-maps-dev inspect|serve <package.mbtiles> | download <store-dir> [options]".into()),
     };
     match result {
@@ -419,6 +427,45 @@ fn download(args: &[String], extras: bool) -> Result<(), String> {
         }
         other => println!("{other:?} ({:.1} s)", started.elapsed().as_secs_f64()),
     };
+    if options.contains_key("terrain") {
+        use offline_maps_core::terrain::{
+            TERRAIN_MAX_ZOOM, TERRAIN_URL, TerrainOutcome, update_terrain,
+        };
+        let bounds = store
+            .active(region.id)
+            .map_err(|e| e.to_string())?
+            .ok_or("download the region's map before its terrain")?
+            .record
+            .metadata
+            .bounds;
+        let result = update_terrain(
+            &store,
+            &region,
+            bounds,
+            TERRAIN_URL,
+            TERRAIN_MAX_ZOOM,
+            &HttpTransport::new(),
+            &UpdateOptions::default(),
+            &mut progress,
+            &cancelled,
+        );
+        let elapsed = started.elapsed().as_secs_f64();
+        match result.map_err(|e| e.to_string())? {
+            TerrainOutcome::Available(newer) => println!("Newer terrain available: {newer:?}"),
+            TerrainOutcome::UpToDate(active) => {
+                println!("Up to date: {} ({elapsed:.1} s)", active.version)
+            }
+            TerrainOutcome::Activated { terrain, replaced } => println!(
+                "Activated terrain {} ({} tiles, {} bytes); replaced {:?} ({elapsed:.1} s)\n{}",
+                terrain.version,
+                terrain.record.tiles,
+                terrain.record.bytes,
+                replaced,
+                terrain.record.attribution
+            ),
+        }
+        return Ok(());
+    }
     if extras {
         use offline_maps_core::extras::{ExtrasOutcome, update_extras};
         let result = update_extras(

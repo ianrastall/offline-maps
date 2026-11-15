@@ -271,6 +271,22 @@ message CatalogRegion {
   string continent = 11;
   // A limitation to show with the region, or empty.
   string note = 12;
+  // Whose elevation data its terrain is made from, finest resolution first.
+  repeated TerrainSource terrain_sources = 13;
+}
+
+// One producer's elevation data under one licence. Mapterhorn builds a region's
+// terrain from several: national elevation models and Copernicus GLO-30.
+message TerrainSource {
+  // Short name for the credit line on the map, such as "USGS".
+  string short_name = 1;
+  // The producer as its licence wants it named.
+  string producer = 2;
+  string license = 3;
+  string website = 4;
+  // Words the licence wants shown on the map itself, or empty (the approval
+  // number under Japan's Survey Act).
+  string notice = 5;
 }
 
 message Catalog {
@@ -318,6 +334,10 @@ message TerrainInfo {
   uint64 tiles = 5;
   uint32 max_zoom = 6;
   string attribution = 7;
+  // Whose elevation data it is made from, finest resolution first.
+  repeated TerrainSource sources = 8;
+  // The box the terrain was downloaded for.
+  Bounds bounds = 9;
 }
 
 message Place {
