@@ -190,6 +190,16 @@ public class MapCoreTests
         Assert.NotNull(extras);
         Assert.True(extras.Prepared);
         Assert.True(core.Update(UpdateTarget.Extras, id).UpToDate);
+        if (published)
+        {
+            // A region with no prepared file is checked against its raw extract (a size query to
+            // Geofabrik; nothing is downloaded).
+            var listed = manifest.RootElement.GetProperty("extras").EnumerateObject().Select(e => e.Name).ToHashSet();
+            var unlisted = core.Catalog().First(r => !listed.Contains(r.Id) && r.Id != "us-il" && r.ExtrasUrl.Contains("geofabrik.de", StringComparison.Ordinal));
+            var raw = core.Update(UpdateTarget.Extras, unlisted.Id, checkOnly: true);
+            Assert.True(raw.Available, unlisted.Id);
+            Assert.InRange(raw.RemoteBytes, unlisted.ExtrasBytes / 2, unlisted.ExtrasBytes * 2);
+        }
     }
 
     /// <summary>Uses a real store when OFFLINE_MAPS_TEST_STORE names one.</summary>

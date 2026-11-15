@@ -105,6 +105,8 @@ The search index is built on the user's computer from the map, so it is not down
 - **Maintainer build.** One script downloads from Geofabrik, processes every region with the core's own extractor, writes the manifest and uploads: about 40 GB per refresh. Data ages between refreshes (Geofabrik updates daily); the app already shows each region's data date.
 - **Fallback.** Whether the app falls back to Geofabrik when a release file is missing or unreachable is decided when this stage is built.
 
+**Stations and addresses done in 0.18.0 (15 November 2026)** ([validation](validation.md#0180-prepared-stations-and-addresses), [sources](sources-and-architecture.md#prepared-stations-and-addresses-0180)): prepared files for North America are published in the `extras` release (101 regions, 1.8 GB, made from 21.6 GB of raw extracts in about an hour), and the rest of the world is being built and published the same way. The app falls back to the raw extract from Geofabrik for any region not listed, a manifest it cannot read, or a file that is missing or not the one listed. Ian confirmed on 15 November that the files are to be published. Not done yet: republishing Geofabrik's map packages (maps still come from Geofabrik for the regions it packages), and a rebuild schedule.
+
 
 
 ### 6. Android foundation

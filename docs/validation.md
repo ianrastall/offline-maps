@@ -341,6 +341,20 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.18.0: Prepared stations and addresses
+
+Completed 15 November 2026: the stations-and-addresses part of stage 5 of the [North America and Android plan](north-america-and-android.md#5-prepared-bundles-on-the-release-page), begun the evening before. How it works is in [sources](sources-and-architecture.md#prepared-stations-and-addresses-0180).
+
+- **Built.** `offline-maps-dev prepare-extras` made all 101 North American regions (the US, Canada and Mexico by state, Greenland) from Geofabrik's raw extracts of 13–14 November and the Mexican state extracts of 8 November in the `regions` release: 1.82 GB of prepared files from 21.6 GB of extracts (8%), in about an hour of building. Illinois 36.1 MB from 363 MB; California 146 MB from 1,335 MB; Quebec 64 MB from 1,167 MB; New York, with its many addresses, 182 MB from 499 MB. Three pilot regions from the evening before (Andorra, Shikoku, Fiji east) are listed too.
+- **A failure found in the run.** New York first failed with "database or disk is full": started outside the D:\lang environment, the tool's SQLite temporary files went to C:, which had about 130 MB free. Rerun with TEMP on G:, it built; maintainer runs now set TEMP to the output drive.
+- **Published.** `tools/bundles/publish.py` checked all 104 files against the manifest (size and SHA-256), created the `extras` release (not marked latest), uploaded the files and then `manifest.json` (20:33 UTC), and wrote `prepared_data.rs`. The release notes give the ODbL terms and attribution.
+- **App.** The catalog carries each region's prepared size; the Regions window shows "About 36 MB to download, prepared for Offline Maps" for Illinois when not installed, and names the prepared files as the source; the stations-and-addresses offer and update sizes use the prepared size. `OFFLINE_MAPS_BUNDLES_URL` points the app at another folder for testing.
+- **Tests.** 87 core, 2 HTTP, 7 ABI and 11 interop tests (new: the catalog's prepared sizes; an end-to-end install of a prepared file through the C# layer from a folder served on loopback, or from the published release).
+
+Checked against the published release (the interop test with `OFFLINE_MAPS_TEST_BUNDLES` set to the release address, in a scratch store on D:): an update check for Nunavut east reported the listed size (176,128 bytes); the download installed it, marked as prepared; a second update reported it up to date. An update check for Afghanistan, not yet listed, reported Geofabrik's raw extract, within a factor of two of the catalog's size, and downloaded nothing.
+
+Not covered: the rest of the world's prepared files, which are being built and published after this release (the app reads the manifest afresh, so it needs no new version for them; their sizes show in the Regions window from the next release); a scheduled rebuild.
+
 ## Android: toolchain and core build
 
 15 November 2026: the first part of stage 6 of the [North America and Android plan](north-america-and-android.md). Not a release; the Windows app is unchanged.
