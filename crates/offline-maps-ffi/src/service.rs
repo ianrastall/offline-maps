@@ -487,6 +487,7 @@ impl Service {
                     continent: r.continent.to_owned(),
                     note: r.note.to_owned(),
                     terrain_sources: terrain_source_messages(r.id),
+                    prepared_extras_bytes: offline_maps_core::bundles::prepared_extras_bytes(r.id),
                 })
                 .collect(),
         }

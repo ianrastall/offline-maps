@@ -47,6 +47,12 @@ internal static class AppPaths
     /// <summary>Where overlay files are published (OFFLINE_MAPS_OVERLAYS_URL); unset means the GitHub releases.</summary>
     public static string? OverlaysUrl { get; } = Environment.GetEnvironmentVariable("OFFLINE_MAPS_OVERLAYS_URL");
 
+    /// <summary>
+    /// Where prepared stations and addresses are published, a folder with manifest.json
+    /// (OFFLINE_MAPS_BUNDLES_URL); unset means the GitHub releases.
+    /// </summary>
+    public static string? BundlesUrl { get; } = Environment.GetEnvironmentVariable("OFFLINE_MAPS_BUNDLES_URL");
+
     private static string? Option(string name)
     {
         string[] args = Environment.GetCommandLineArgs();

@@ -38,6 +38,13 @@ public sealed partial class MainWindow
 
     internal string RegionName(string id) => _catalog.FirstOrDefault(r => r.Id == id)?.Name ?? id;
 
+    /// <summary>
+    /// The download for a region's stations and addresses: its prepared file where one was
+    /// published when the app was built, otherwise the raw extract they are read from.
+    /// </summary>
+    internal static ulong ExtrasDownloadBytes(CatalogRegion? region) =>
+        region is null ? 0 : region.PreparedExtrasBytes > 0 ? region.PreparedExtrasBytes : region.ExtrasBytes;
+
     private void Regions_Click(object sender, RoutedEventArgs e) => OpenRegions();
 
     /// <summary>Opens the Regions window, on <paramref name="regionId"/> when given.</summary>
@@ -191,7 +198,7 @@ public sealed partial class MainWindow
         return job.Target switch
         {
             UpdateTarget.Map => region?.PackageBytes ?? 0,
-            UpdateTarget.Extras => region?.ExtrasBytes ?? 0,
+            UpdateTarget.Extras => ExtrasDownloadBytes(region),
             UpdateTarget.Terrain => region?.TerrainBytes ?? 0,
             _ => region?.OverlayBytes ?? 0,
         };
@@ -262,11 +269,19 @@ public sealed partial class MainWindow
         {
             return;
         }
-        ulong bytes = (ulong)missing.Sum(r => (decimal)(_catalog.FirstOrDefault(c => c.Id == r.Id)?.ExtrasBytes ?? 0));
+        var regions = missing.Select(r => _catalog.FirstOrDefault(c => c.Id == r.Id)).ToList();
+        ulong bytes = (ulong)regions.Sum(r => (decimal)ExtrasDownloadBytes(r));
+        bool allPrepared = regions.All(r => r is { PreparedExtrasBytes: > 0 });
+        bool nonePrepared = regions.All(r => r is not { PreparedExtrasBytes: > 0 });
+        string how = allPrepared
+            ? "are downloaded already prepared from Offline Maps' releases"
+            : nonePrepared
+                ? "are read from Geofabrik's full data files, and only what is read from them is kept"
+                : "are downloaded already prepared from Offline Maps' releases where published, and otherwise read from Geofabrik's full data files, keeping only what is read";
         var answer = await ShowDialogAsync(new ContentDialog
         {
             Title = "Download stations and addresses?",
-            Content = Text($"Fuel and charging stations, street addresses and outdoor places for {Format.List(missing.Select(r => r.Name))} are read from Geofabrik's full data files, about {Format.Megabytes(bytes)} in all as of November 2026. Only what is read from them is kept. The maps themselves are not changed."),
+            Content = Text($"Fuel and charging stations, street addresses and outdoor places for {Format.List(missing.Select(r => r.Name))} {how}: about {Format.Megabytes(bytes)} in all as of November 2026. The maps themselves are not changed."),
             PrimaryButtonText = "Download",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,

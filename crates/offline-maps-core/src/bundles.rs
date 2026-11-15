@@ -59,6 +59,15 @@ fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
 
+/// The size of a region's prepared stations and addresses as published when
+/// the app was built (`prepared_data.rs`, written by `tools/bundles/publish.py`),
+/// for showing before a download; 0 when none was published.
+pub fn prepared_extras_bytes(region_id: &str) -> u64 {
+    crate::prepared_data::PREPARED_EXTRAS
+        .binary_search_by_key(&region_id, |(id, _)| id)
+        .map_or(0, |i| crate::prepared_data::PREPARED_EXTRAS[i].1)
+}
+
 /// The file name a region's prepared extras are published under.
 pub fn extras_file_name(region_id: &str) -> String {
     format!("{region_id}-extras.sqlite")

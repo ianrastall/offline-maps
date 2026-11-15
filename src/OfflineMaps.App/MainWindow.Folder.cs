@@ -104,7 +104,7 @@ public sealed partial class MainWindow
         old?.Dispose();
         try
         {
-            _core = await Task.Run(() => MapCore.Open(AppPaths.StoreDir, AppPaths.PackageUrl, AppPaths.ExtrasUrl, AppPaths.OverlaysUrl, AppPaths.OverviewPath));
+            _core = await Task.Run(() => MapCore.Open(AppPaths.StoreDir, AppPaths.PackageUrl, AppPaths.ExtrasUrl, AppPaths.OverlaysUrl, AppPaths.OverviewPath, AppPaths.BundlesUrl));
         }
         catch (MapCoreException ex)
         {

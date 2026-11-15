@@ -11,6 +11,7 @@ pub mod overlays;
 pub mod package;
 pub mod places;
 pub mod pmtiles;
+pub mod prepared_data;
 pub mod regions;
 pub mod relocate;
 pub mod search;

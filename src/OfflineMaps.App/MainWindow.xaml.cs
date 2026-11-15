@@ -84,7 +84,7 @@ public sealed partial class MainWindow : Window
         _placed = true;
         try
         {
-            _core = await Task.Run(() => MapCore.Open(AppPaths.StoreDir, AppPaths.PackageUrl, AppPaths.ExtrasUrl, AppPaths.OverlaysUrl, AppPaths.OverviewPath));
+            _core = await Task.Run(() => MapCore.Open(AppPaths.StoreDir, AppPaths.PackageUrl, AppPaths.ExtrasUrl, AppPaths.OverlaysUrl, AppPaths.OverviewPath, AppPaths.BundlesUrl));
         }
         catch (MapCoreException ex)
         {

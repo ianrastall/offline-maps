@@ -281,6 +281,10 @@ message CatalogRegion {
   string note = 12;
   // Whose elevation data its terrain is made from, finest resolution first.
   repeated TerrainSource terrain_sources = 13;
+  // Size of its prepared stations and addresses (this project's releases)
+  // when the app was built; 0 when none was published, and they are read
+  // from the raw extract (extras_bytes) instead.
+  uint64 prepared_extras_bytes = 14;
 }
 
 // One producer's elevation data under one licence. Mapterhorn builds a region's

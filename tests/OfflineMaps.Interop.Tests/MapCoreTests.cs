@@ -146,6 +146,52 @@ public class MapCoreTests
         Assert.Equal(64, core.GetStatus().Places.Count);
     }
 
+    [Fact]
+    public void CatalogShowsPreparedSizesWherePublished()
+    {
+        using var store = new TempStore();
+        using var core = MapCore.Open(store.Path);
+        var prepared = core.Catalog().Where(r => r.PreparedExtrasBytes > 0).ToList();
+        Assert.NotEmpty(prepared);
+        // A prepared file keeps only what is read from the raw extract.
+        Assert.All(prepared, r => Assert.True(r.PreparedExtrasBytes < r.ExtrasBytes, r.Id));
+    }
+
+    /// <summary>
+    /// Installs the smallest region's prepared stations and addresses through the app's path,
+    /// from OFFLINE_MAPS_TEST_BUNDLES: a folder made by `offline-maps-dev prepare-extras`, served
+    /// on this computer, or the address of a published one (the extras release).
+    /// </summary>
+    [Fact]
+    public async Task PreparedExtrasWhenAvailable()
+    {
+        string? source = Environment.GetEnvironmentVariable("OFFLINE_MAPS_TEST_BUNDLES");
+        if (source is null)
+        {
+            return;
+        }
+        bool published = source.StartsWith("https://", StringComparison.Ordinal);
+        string json = published
+            ? await new HttpClient().GetStringAsync($"{source.TrimEnd('/')}/manifest.json")
+            : await File.ReadAllTextAsync(System.IO.Path.Combine(source, "manifest.json"));
+        using var manifest = System.Text.Json.JsonDocument.Parse(json);
+        var smallest = manifest.RootElement.GetProperty("extras").EnumerateObject()
+            .MinBy(e => e.Value.GetProperty("bytes").GetUInt64());
+        string id = smallest.Name;
+        ulong bytes = smallest.Value.GetProperty("bytes").GetUInt64();
+        using var server = published ? null : new FolderServer(source);
+        using var store = new TempStore();
+        using var core = MapCore.Open(store.Path, bundlesUrl: server?.Url ?? source);
+        var check = core.Update(UpdateTarget.Extras, id, checkOnly: true);
+        Assert.True(check.Available);
+        Assert.Equal(bytes, check.RemoteBytes);
+        Assert.False(core.Update(UpdateTarget.Extras, id).UpToDate);
+        var extras = Assert.Single(core.GetStatus().Regions, r => r.Id == id).Extras;
+        Assert.NotNull(extras);
+        Assert.True(extras.Prepared);
+        Assert.True(core.Update(UpdateTarget.Extras, id).UpToDate);
+    }
+
     /// <summary>Uses a real store when OFFLINE_MAPS_TEST_STORE names one.</summary>
     [Fact]
     public void RealStoreWhenAvailable()

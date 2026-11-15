@@ -43,7 +43,7 @@ public sealed class MapCore : IDisposable
     }
 
     /// <summary>Opens the store in <paramref name="storeDirectory"/> (created if missing).</summary>
-    public static unsafe MapCore Open(string storeDirectory, string? packageUrl = null, string? extrasUrl = null, string? overlaysUrl = null, string? overviewPath = null)
+    public static unsafe MapCore Open(string storeDirectory, string? packageUrl = null, string? extrasUrl = null, string? overlaysUrl = null, string? overviewPath = null, string? bundlesUrl = null)
     {
         EnsureCompatible();
         byte[] config = new Config
@@ -53,6 +53,7 @@ public sealed class MapCore : IDisposable
             ExtrasUrl = extrasUrl ?? "",
             OverlaysUrl = overlaysUrl ?? "",
             OverviewPath = overviewPath ?? "",
+            BundlesUrl = bundlesUrl ?? "",
         }.ToByteArray();
         NativeStatus status;
         CoreSafeHandle handle;

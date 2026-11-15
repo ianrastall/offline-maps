@@ -308,7 +308,9 @@ public sealed partial class RegionsWindow : Window
         }
         else
         {
-            lines.Add($"Stations and addresses: not installed. Read from a {Format.Megabytes(r.ExtrasBytes)} download; only what is read from it is kept.");
+            lines.Add(r.PreparedExtrasBytes > 0
+                ? $"Stations and addresses: not installed. About {Format.Megabytes(r.PreparedExtrasBytes)} to download, prepared for Offline Maps; needs the map first."
+                : $"Stations and addresses: not installed. Read from a {Format.Megabytes(r.ExtrasBytes)} download; only what is read from it is kept.");
         }
         if (installed?.Overlays is { } overlays)
         {
@@ -366,11 +368,14 @@ public sealed partial class RegionsWindow : Window
         RemoveButton.Visibility = installed is null ? Visibility.Collapsed : Visibility.Visible;
         RemoveButton.IsEnabled = !busy && !mapQueued && !extrasQueued && !terrainQueued;
         bool builtMap = r.PackageUrl.StartsWith("https://github.com/", StringComparison.Ordinal);
-        bool builtExtras = r.ExtrasUrl.StartsWith("https://github.com/", StringComparison.Ordinal);
+        // Stations and addresses are published prepared for most regions, made from Geofabrik's
+        // extract or from the extract cut for the region in the regions release.
+        bool builtExtras = r.PreparedExtrasBytes > 0 || r.ExtrasUrl.StartsWith("https://github.com/", StringComparison.Ordinal);
         string source = (builtMap, builtExtras) switch
         {
             (true, true) => $"Map, stations and addresses prepared for Offline Maps from Geofabrik's OpenStreetMap data and published with its releases ({r.SourcePage})",
             (true, false) => $"Map built for Offline Maps from Geofabrik's OpenStreetMap extract and published with its releases ({r.SourcePage}); stations and addresses from Geofabrik",
+            (false, true) => $"Map from Geofabrik ({r.SourcePage}); stations and addresses prepared for Offline Maps from Geofabrik's OpenStreetMap extract and published with its releases",
             _ => $"Map, stations and addresses from Geofabrik ({r.SourcePage})",
         };
         SourceText.Text = $"{source}; map data © OpenStreetMap contributors (ODbL). Terrain from Mapterhorn (download.mapterhorn.com), made from national elevation models and Copernicus GLO-30; Map information lists the producers and licences of installed terrain, and mapterhorn.com/attribution lists them all. Sizes are as of November 2026.";
