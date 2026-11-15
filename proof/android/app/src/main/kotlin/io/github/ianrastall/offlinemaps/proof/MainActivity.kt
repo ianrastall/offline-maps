@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -46,6 +47,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         theme = if ((resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES) "dark" else "light"
         readExtras(intent)
+        // A map in use stays on screen.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         frame = FrameLayout(this)
         info = TextView(this).apply {
             setTextColor(Color.WHITE)
