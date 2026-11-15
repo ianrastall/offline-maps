@@ -353,6 +353,10 @@ Completed 15 November 2026: the stations-and-addresses part of stage 5 of the [N
 
 Checked against the published release (the interop test with `OFFLINE_MAPS_TEST_BUNDLES` set to the release address, in a scratch store on D:): an update check for Nunavut east reported the listed size (176,128 bytes); the download installed it, marked as prepared; a second update reported it up to date. An update check for Afghanistan, not yet listed, reported Geofabrik's raw extract, within a factor of two of the catalog's size, and downloaded nothing.
 
+Installed silently over 0.17.0 on Ian's machine (Settings > Apps lists 0.18.0; the Start entry is in place) and started from Start (0.18.0+f4383e4); saved places and settings were byte-for-byte unchanged. Through UI Automation, with nothing downloaded and the copy started for the check closed afterwards: Rhode Island, not installed, "Stations and addresses: not installed. About 3 MB to download, prepared for Offline Maps; needs the map first.", and its source line "Map from Geofabrik (…); stations and addresses prepared for Offline Maps from Geofabrik's OpenStreetMap extract and published with its releases"; Afghanistan, not yet prepared, "Read from a 113 MB download; only what is read from it is kept." and its sources from Geofabrik. Known wording gap: the source line describes where a region's stations and addresses are downloaded from, so Illinois's says "prepared" although Ian's installed copy was read on this computer on 13 November.
+
+The release build ran from a `pwsh -NoProfile` script with TEMP on D: (C: had little free space). Released 15 November 2026 as [v0.18.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.18.0), built from f4383e4; the installer's SHA-256 (2a94ad78…b6d1aa) matches GitHub's digest.
+
 Not covered: the rest of the world's prepared files, which are being built and published after this release (the app reads the manifest afresh, so it needs no new version for them; their sizes show in the Regions window from the next release); a scheduled rebuild.
 
 ## Android: toolchain and core build
