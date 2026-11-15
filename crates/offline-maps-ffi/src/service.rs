@@ -8,13 +8,16 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
+use std::time::{Duration, Instant};
 
 use offline_maps_core::Coordinates;
+use offline_maps_core::bundles::{BUNDLES_BASE, Manifest};
 use offline_maps_core::download::{
     HttpTransport, Newer, Progress, UpdateError, UpdateOptions, UpdateOutcome, update_region,
 };
 use offline_maps_core::extras::{
     ActiveExtras, ExtrasOutcome, active_extras, prune_extras, stations_geojson_all, update_extras,
+    update_extras_prepared,
 };
 use offline_maps_core::mbtiles::{Bounds, TileEncoding, TilePackage};
 use offline_maps_core::merge::merge_tiles;
@@ -86,6 +89,10 @@ pub struct Service {
     extras_url: Option<&'static str>,
     terrain_url: String,
     overlays_base: String,
+    /// Where prepared stations and addresses are published.
+    bundles_base: String,
+    /// The list of prepared files and when it was read (`None`: unreadable then).
+    manifest: Mutex<Option<(Instant, Option<Arc<Manifest>>)>>,
     /// The built-in whole-country overview, when the program folder has it.
     overview: Mutex<Option<TilePackage>>,
     /// Installed regions, in catalog order.
@@ -367,6 +374,11 @@ impl Service {
                 "" => OVERLAYS_BASE.to_owned(),
                 url => url.to_owned(),
             },
+            bundles_base: match config.bundles_url.as_str() {
+                "" => BUNDLES_BASE.to_owned(),
+                url => url.to_owned(),
+            },
+            manifest: Mutex::new(None),
             overview: Mutex::new(
                 (!config.overview_path.is_empty())
                     .then(|| TilePackage::open(Path::new(&config.overview_path)).ok())
@@ -383,6 +395,27 @@ impl Service {
         };
         service.reload();
         Ok(service)
+    }
+
+    /// The published list of prepared files, read at most every ten minutes;
+    /// a failed read is tried again after one. `None` when it cannot be read:
+    /// regions are then prepared on this computer.
+    fn manifest(&self, transport: &HttpTransport) -> Option<Arc<Manifest>> {
+        let mut cached = lock(&self.manifest);
+        if let Some((read, manifest)) = &*cached {
+            let fresh = match manifest {
+                Some(_) => Duration::from_secs(600),
+                None => Duration::from_secs(60),
+            };
+            if read.elapsed() < fresh {
+                return manifest.clone();
+            }
+        }
+        let manifest = Manifest::fetch(transport, &self.bundles_base)
+            .ok()
+            .map(Arc::new);
+        *cached = Some((Instant::now(), manifest.clone()));
+        manifest
     }
 
     /// The catalog region `id`, with the test overrides applied to Illinois.
@@ -516,6 +549,7 @@ impl Service {
                     campgrounds: r.stats.campgrounds,
                     toilets: r.stats.toilets,
                     outdoor: r.extract_version >= offline_maps_core::extras::EXTRACT_VERSION,
+                    prepared: r.prepared.is_some(),
                 }
             });
             let terrain = slot.terrain.as_ref().map(|t| {
@@ -1036,7 +1070,10 @@ impl Service {
         let id = region.id;
         let available = |newer: Newer| pb::UpdateResult {
             available: true,
-            remote_date: http_date_to_iso(newer.last_modified.as_deref()),
+            remote_date: newer
+                .date
+                .clone()
+                .unwrap_or_else(|| http_date_to_iso(newer.last_modified.as_deref())),
             remote_bytes: newer.length.unwrap_or_default(),
             ..Default::default()
         };
@@ -1129,14 +1166,49 @@ impl Service {
                     },
                 })
             }
-            _ => update_extras(
-                &self.store,
-                &region,
-                &transport,
-                &options,
-                &mut |p| self.report(p),
-                &self.cancel,
-            )
+            _ => {
+                let from_extract = || {
+                    update_extras(
+                        &self.store,
+                        &region,
+                        &transport,
+                        &options,
+                        &mut |p| self.report(p),
+                        &self.cancel,
+                    )
+                };
+                // A test address for the raw extract is always used.
+                let prepared = if self.extras_url.is_some() && region.id == ILLINOIS.id {
+                    None
+                } else {
+                    self.manifest(&transport)
+                        .and_then(|m| m.extras_for(region.id).cloned())
+                };
+                match prepared {
+                    None => from_extract(),
+                    Some(file) => match update_extras_prepared(
+                        &self.store,
+                        &region,
+                        &self.bundles_base,
+                        &file,
+                        &transport,
+                        &options,
+                        &mut |p| self.report(p),
+                        &self.cancel,
+                    ) {
+                        // The list and the files are replaced one at a time, so a
+                        // file can be missing or not yet the one listed: prepare
+                        // the region here instead.
+                        Err(UpdateError::Invalid(_)) => from_extract(),
+                        Err(UpdateError::Network(e))
+                            if e.kind() == std::io::ErrorKind::NotFound =>
+                        {
+                            from_extract()
+                        }
+                        other => other,
+                    },
+                }
+            }
             .map(|outcome| match outcome {
                 ExtrasOutcome::Available(newer) => available(newer),
                 ExtrasOutcome::UpToDate(active) => pb::UpdateResult {

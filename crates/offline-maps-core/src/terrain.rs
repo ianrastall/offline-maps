@@ -276,6 +276,7 @@ pub fn update_terrain(
         return Ok(TerrainOutcome::Available(crate::download::Newer {
             last_modified: info.last_modified.clone(),
             length: None,
+            date: None,
         }));
     }
 

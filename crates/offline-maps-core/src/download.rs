@@ -329,6 +329,9 @@ pub struct Newer {
     pub last_modified: Option<String>,
     /// Its size, when the server reports it.
     pub length: Option<u64>,
+    /// The date of its data (YYYY-MM-DD) where a list of published files
+    /// states it, rather than a server header.
+    pub date: Option<String>,
 }
 
 impl Newer {
@@ -336,6 +339,7 @@ impl Newer {
         Self {
             last_modified: remote.last_modified.clone(),
             length: remote.length,
+            date: None,
         }
     }
 }

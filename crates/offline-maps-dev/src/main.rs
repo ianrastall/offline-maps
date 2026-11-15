@@ -21,6 +21,10 @@
 //!       (writes each catalog region's terrain sources from Mapterhorn's coverage
 //!       index: the core's table and the list for the third-party notices; then
 //!       cargo fmt and python tools/third-party-notices.py)
+//!   offline-maps-dev prepare-extras <out-dir> [--regions us-il,us-in]
+//!       [--continent "North America"] [--country Japan] [--local <folder of .osm.pbf>]
+//!       (builds the prepared stations-and-addresses files published with the
+//!       releases, and manifest.json; skips regions already built there)
 //!
 //! `serve` binds 127.0.0.1 only and stands in for the WebView2 request
 //! interception the app will use: tiles come from the Rust core, every
@@ -30,6 +34,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::atomic::AtomicBool;
 
+mod prepare_extras;
 mod server;
 mod terrain_sources;
 
@@ -276,6 +281,9 @@ fn main() -> ExitCode {
         Some("extract") => extract(&args[1..]),
         Some("terrain-size") => terrain_size(&args[1..]),
         Some("terrain-sources") => terrain_sources::run(&args[1..]),
+        Some("prepare-extras") => {
+            parse(&args[1..]).and_then(|(out, options)| prepare_extras::run(&out, &options))
+        }
         _ => Err("usage: offline-maps-dev inspect|serve <package.mbtiles> | download <store-dir> [options]".into()),
     };
     match result {

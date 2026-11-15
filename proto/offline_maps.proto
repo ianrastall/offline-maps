@@ -27,6 +27,10 @@ message Config {
   // The built-in overview of the whole country (an MBTiles file in the program
   // folder); empty for none.
   string overview_path = 6;
+  // Override of where prepared stations and addresses are published (a
+  // manifest.json and <region>-extras.sqlite files), for testing; empty uses
+  // the GitHub releases.
+  string bundles_url = 7;
 }
 
 message Position {
@@ -241,7 +245,8 @@ message ExtrasInfo {
   uint64 fuel = 4;
   uint64 charging = 5;
   uint64 addresses = 6;
-  // Size of the raw extract that was read (it is not kept).
+  // Size of the raw extract that was read (it is not kept), here or where
+  // the prepared file was made.
   uint64 source_bytes = 7;
   uint64 shelters = 8;
   uint64 drinking_water = 9;
@@ -250,6 +255,9 @@ message ExtrasInfo {
   // Built with outdoor places (shelters, water, campgrounds, toilets); false
   // for extras installed before 0.4.0, which an update rebuilds.
   bool outdoor = 12;
+  // Downloaded as a prepared file from this project's releases, not read from
+  // the raw extract on this computer.
+  bool prepared = 13;
 }
 
 message CatalogRegion {

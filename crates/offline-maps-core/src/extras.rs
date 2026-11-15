@@ -973,6 +973,21 @@ pub struct ExtrasRecord {
     /// [`EXTRACT_VERSION`] when built; 1 for extras built before it was recorded.
     #[serde(default = "first_extract_version")]
     pub extract_version: u32,
+    /// The raw extract's header box; absent in records written before 0.18.0.
+    #[serde(default)]
+    pub bbox: Option<Bounds>,
+    /// The published file these extras were downloaded as; absent when they
+    /// were built on this computer from the raw extract.
+    #[serde(default)]
+    pub prepared: Option<PreparedSource>,
+}
+
+/// A prepared extras file as it was downloaded (see `bundles`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PreparedSource {
+    pub url: String,
+    pub sha256: String,
+    pub byte_length: u64,
 }
 
 fn first_extract_version() -> u32 {
@@ -1224,6 +1239,8 @@ pub fn update_extras(
         attribution: crate::OSM_ATTRIBUTION.to_owned(),
         license: "ODbL-1.0".to_owned(),
         extract_version: EXTRACT_VERSION,
+        bbox: extract.header.bbox,
+        prepared: None,
     };
     let stamp: String = built_at
         .chars()
@@ -1247,10 +1264,15 @@ pub fn update_extras(
 /// The extract must be for this region: its header box covers the region's
 /// required points and lies inside the region's outer box.
 fn check_coverage(extract: &Extract, region: &Region) -> Result<(), String> {
-    let bbox: Bounds = extract
-        .header
-        .bbox
-        .ok_or("The OpenStreetMap extract has no bounding box")?;
+    check_box(extract.header.bbox, region)?;
+    if extract.towns.is_empty() {
+        return Err("The OpenStreetMap extract contains no towns".into());
+    }
+    Ok(())
+}
+
+fn check_box(bbox: Option<Bounds>, region: &Region) -> Result<(), String> {
+    let bbox = bbox.ok_or("The OpenStreetMap extract has no bounding box")?;
     let covers = region.required_points.iter().all(|(lon, lat)| {
         bbox.west <= *lon && *lon <= bbox.east && bbox.south <= *lat && *lat <= bbox.north
     });
@@ -1260,10 +1282,180 @@ fn check_coverage(extract: &Extract, region: &Region) -> Result<(), String> {
             region.name
         ));
     }
-    if extract.towns.is_empty() {
-        return Err("The OpenStreetMap extract contains no towns".into());
-    }
     Ok(())
+}
+
+/// Stores `record` inside the extras file at `path`, making it a prepared
+/// file that can be published: a copy of the app that downloads it reads the
+/// record back instead of building one from the raw extract.
+pub fn stamp_prepared(path: &Path, record: &ExtrasRecord) -> Result<(), PackageError> {
+    let json = serde_json::to_string(&ExtrasRecord {
+        prepared: None,
+        ..record.clone()
+    })
+    .map_err(|e| PackageError::Invalid(e.to_string()))?;
+    let db = Connection::open(path)?;
+    db.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES ('record', ?1)",
+        [json],
+    )?;
+    // One file, no journal beside it, and no free pages.
+    db.execute_batch("VACUUM;")?;
+    Ok(())
+}
+
+/// Checks a downloaded prepared extras file and returns the record stored in
+/// it: written in this copy's formats, made from this region's extract, and
+/// a sound database with towns in it.
+pub fn verify_prepared(path: &Path, region: &Region) -> Result<ExtrasRecord, PackageError> {
+    let invalid = |message: &str| PackageError::Invalid(message.to_owned());
+    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|_| invalid("the prepared file is not a database"))?;
+    let schema = meta(&db, "extras_schema").map_err(|_| invalid("this is not a prepared file"))?;
+    if schema != EXTRAS_SCHEMA.to_string() {
+        return Err(invalid("the prepared file is in another format"));
+    }
+    let record: ExtrasRecord = serde_json::from_str(&meta(&db, "record")?)
+        .map_err(|e| PackageError::Invalid(format!("the prepared file's record: {e}")))?;
+    if record.region_id != region.id || record.extract_version != EXTRACT_VERSION {
+        return Err(PackageError::Invalid(format!(
+            "the prepared file is not for {}",
+            region.name
+        )));
+    }
+    check_box(record.bbox, region).map_err(PackageError::Invalid)?;
+    let sound: String = db.query_row("PRAGMA quick_check(1)", [], |r| r.get(0))?;
+    if sound != "ok" {
+        return Err(invalid("the prepared file is damaged"));
+    }
+    let count = |table: &str| -> Result<i64, PackageError> {
+        Ok(db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))?)
+    };
+    if count("towns")? == 0 {
+        return Err(invalid("the prepared file contains no towns"));
+    }
+    for table in ["entries", "stations"] {
+        count(table)?;
+    }
+    Ok(record)
+}
+
+/// Brings the region's stations and addresses up to date from a prepared
+/// file published at `<base>/<prepared.file>` (see `bundles`), instead of
+/// downloading and reading the raw extract. The download must have the
+/// listed size and SHA-256 and pass [`verify_prepared`]. Installed extras
+/// made from the same or newer data are left alone.
+#[allow(clippy::too_many_arguments)]
+pub fn update_extras_prepared(
+    store: &PackageStore,
+    region: &Region,
+    base: &str,
+    prepared: &crate::bundles::PreparedExtras,
+    transport: &dyn Transport,
+    options: &UpdateOptions,
+    progress: &mut dyn FnMut(Progress),
+    cancelled: &AtomicBool,
+) -> Result<ExtrasOutcome, UpdateError> {
+    let id = extras_id(region.id);
+    let url = crate::bundles::file_url(base, &prepared.file);
+    let _lock = store.lock(&id).map_err(|e| match e.kind() {
+        io::ErrorKind::WouldBlock => UpdateError::Busy,
+        _ => UpdateError::Storage(e),
+    })?;
+    let installed = active_extras(store, region.id).ok().flatten();
+    let active = installed.clone().filter(|a| open_entries(&a.path).is_ok());
+
+    progress(Progress::Checking);
+    if let Some(active) = active
+        .as_ref()
+        .filter(|a| a.record.extract_version >= EXTRACT_VERSION)
+        .filter(|a| {
+            let same = a
+                .record
+                .prepared
+                .as_ref()
+                .is_some_and(|p| p.sha256 == prepared.sha256);
+            // RFC 3339 times in UTC order as text.
+            let not_newer = matches!(
+                (&prepared.data_timestamp, &a.record.data_timestamp),
+                (Some(theirs), Some(mine)) if theirs <= mine
+            );
+            same || not_newer
+        })
+    {
+        return Ok(ExtrasOutcome::UpToDate(active.clone()));
+    }
+    if options.check_only {
+        return Ok(ExtrasOutcome::Available(crate::download::Newer {
+            last_modified: None,
+            length: Some(prepared.bytes),
+            date: prepared
+                .data_timestamp
+                .as_deref()
+                .map(|t| t.chars().take(10).collect()),
+        }));
+    }
+    let remote = transport.probe(&url).map_err(network)?;
+    let mismatch = || {
+        UpdateError::Invalid(PackageError::Invalid(
+            "the prepared file does not match its listing".into(),
+        ))
+    };
+    if remote.length != Some(prepared.bytes) {
+        return Err(mismatch());
+    }
+    check_size(remote.length, options)?;
+    download_to_staging(
+        store, &id, &url, &remote, transport, options, progress, cancelled,
+    )?;
+    let part = store.staging_file(&id);
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(UpdateError::Cancelled);
+    }
+    let downloaded_at = (options.clock)();
+
+    progress(Progress::Verifying);
+    let (sha256, byte_length) = sha256_file(&part, cancelled).map_err(|e| match e.kind() {
+        io::ErrorKind::Interrupted => UpdateError::Cancelled,
+        _ => UpdateError::Storage(e),
+    })?;
+    if sha256 != prepared.sha256 || byte_length != prepared.bytes {
+        let _ = store.clear_staging(&id);
+        return Err(mismatch());
+    }
+    let record = match verify_prepared(&part, region) {
+        Ok(record) => ExtrasRecord {
+            downloaded_at: downloaded_at.clone(),
+            prepared: Some(PreparedSource {
+                url,
+                sha256: sha256.clone(),
+                byte_length,
+            }),
+            ..record
+        },
+        Err(e) => {
+            let _ = store.clear_staging(&id);
+            return Err(UpdateError::Invalid(e));
+        }
+    };
+
+    progress(Progress::Activating);
+    let stamp: String = downloaded_at
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect();
+    let version = format!("{stamp}-{}", &sha256[..12]);
+    install(store, region.id, &version, &part, &record).map_err(UpdateError::Storage)?;
+    let _ = store.clear_staging(&id);
+    let extras = active_extras(store, region.id)
+        .map_err(|e| UpdateError::Storage(io::Error::other(e.to_string())))?
+        .ok_or_else(|| UpdateError::Storage(io::Error::other("Activated extras are missing")))?;
+    let prune_pending = prune(store, region.id, &version);
+    Ok(ExtrasOutcome::Activated {
+        extras,
+        replaced: installed.map(|a| a.version),
+        prune_pending,
+    })
 }
 
 #[cfg(test)]

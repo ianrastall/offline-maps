@@ -583,3 +583,6 @@ fn outdoor_places_are_extracted_and_named() {
     );
     assert!(extract.stations.iter().all(|s| s.fuels.is_empty()));
 }
+
+#[path = "extras_prepared_tests.rs"]
+mod prepared;
