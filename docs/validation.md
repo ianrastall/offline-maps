@@ -341,6 +341,19 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## Android: toolchain and core build
+
+15 November 2026: the first part of stage 6 of the [North America and Android plan](north-america-and-android.md). Not a release; the Windows app is unchanged.
+
+- **Toolchain.** Android SDK command-line tools 22.0 (SHA-256 matched Google's published value), platform tools 37.0.1, platform 36, build tools 36.1.0 and NDK 30.0.16248370, in `D:\lang\android`; Rust targets `aarch64-linux-android` and `x86_64-linux-android` for the pinned 1.99.1; cargo-ndk 4.1.2. No emulator image and no Android Studio.
+- **Finding.** The core did not build for Android: native-tls uses OpenSSL there, and the NDK has none.
+- **Change.** On Android, `HttpTransport` uses ureq's rustls provider (ring) with Mozilla's root certificates (webpki-roots); elsewhere it is native-tls with the system's certificate store, as before. The choice is by target in `crates/offline-maps-core/Cargo.toml`, with no feature flag to set.
+- **Build.** `cargo ndk -t arm64-v8a -t x86_64 build --release -p offline-maps-core -p offline-maps-ffi` succeeds. `liboffline_maps_ffi.so` is 8.1 MB for each target, exports the nine `om_` functions of the C ABI and needs only `libc`, `libm` and `libdl`. Clippy for the Android target passes with warnings denied.
+- **Windows unchanged.** `cargo tree` for `x86_64-pc-windows-msvc` still shows native-tls and SChannel and no rustls or ring. Format, Clippy and all 96 tests pass with `--locked`.
+- **The rustls settings against the real servers.** A throwaway Windows program with the same provider and root certificates sent HEAD requests: Geofabrik and Mapterhorn answered 200 and GitHub completed the handshake; `expired.badssl.com` failed with "certificate expired" and `self-signed.badssl.com` with "UnknownIssuer".
+
+Not covered: the library has not been loaded or run on a phone or emulator, so downloads, SQLite, file locking and storage paths are untested on Android. The Android build is not part of `build/build.ps1`.
+
 ## 0.17.0: Terrain credits by region
 
 Completed 14 November 2026: stage W5 of the [worldwide plan](worldwide.md).

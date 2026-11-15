@@ -13,4 +13,12 @@ rusqlite = { version = "0.41.1", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
+
+# HTTPS: the system's TLS library and certificate store (SChannel on Windows) everywhere
+# except Android, which has no system TLS library a native library can link. There it is
+# rustls (ring) with Mozilla's root certificates compiled in.
+[target.'cfg(not(target_os = "android"))'.dependencies]
 ureq = { version = "3.5.1", default-features = false, features = ["native-tls-no-default"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }

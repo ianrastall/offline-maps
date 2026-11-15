@@ -101,9 +101,23 @@ fn read_exact_range(body: impl Read, length: u64) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// HTTPS transport using the Windows certificate store (SChannel).
+/// HTTPS transport. Uses the system's TLS library and certificate store (SChannel on
+/// Windows), except on Android, where it is rustls with Mozilla's root certificates
+/// compiled in.
 pub struct HttpTransport {
     agent: ureq::Agent,
+}
+
+fn tls_config() -> ureq::tls::TlsConfig {
+    use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
+    #[cfg(not(target_os = "android"))]
+    let (provider, roots) = (TlsProvider::NativeTls, RootCerts::PlatformVerifier);
+    #[cfg(target_os = "android")]
+    let (provider, roots) = (TlsProvider::Rustls, RootCerts::WebPki);
+    TlsConfig::builder()
+        .provider(provider)
+        .root_certs(roots)
+        .build()
 }
 
 impl Default for HttpTransport {
@@ -114,13 +128,8 @@ impl Default for HttpTransport {
 
 impl HttpTransport {
     pub fn new() -> Self {
-        use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
-        let tls = TlsConfig::builder()
-            .provider(TlsProvider::NativeTls)
-            .root_certs(RootCerts::PlatformVerifier)
-            .build();
         let agent = ureq::Agent::config_builder()
-            .tls_config(tls)
+            .tls_config(tls_config())
             .user_agent(USER_AGENT)
             .http_status_as_error(false)
             .max_redirects(5)
