@@ -6,7 +6,7 @@
 
 On Android, should the map be the Windows app's map page (`web/`) in Android's WebView, or MapLibre Native? Both read the same tiles from the Rust core and the same style.
 
-Result: **both work offline with the installed Illinois maps**, on the emulator and on Ian's phone. The WebView shows everything the Windows app shows, contour lines included. MapLibre Native reaches the first finished frame sooner and uses less memory, but has no contour lines and needs the page's runtime layers rewritten in Kotlin. Which to build on is Ian's decision (see [Recommendation](#recommendation)).
+Result: **both work offline with the installed Illinois maps**, on the emulator and on Ian's phone. The WebView shows everything the Windows app shows, contour lines included. MapLibre Native reaches the first finished frame sooner and uses less memory, but has no contour lines and needs the page's runtime layers rewritten in Kotlin. **Decision (Ian, 15 November 2026): WebView**, as recommended below.
 
 ## Setup
 
@@ -65,6 +65,8 @@ Compared view by view:
 - **The emulator is slower than the phone** (about two to three times, as the table shows), so its timings compare the two renderers but do not predict a phone's.
 
 ## Recommendation
+
+Accepted by Ian on 15 November 2026.
 
 **WebView for the first Android version.** It already shows everything the Windows app does, with one map page for both editions: features and fixes made once in `web/` reach both, and contour lines need no new work. On Ian's phone it costs about 0.3–0.4 s more to the first frame and about 200 MB more memory of 8 GB. MapLibre Native remains the option if WebView proves too slow to pan or too heavy on the battery in use; it would bring the work listed above (contour tiles, the style layers, credits and scale in Kotlin, and the dropped geometry to investigate).
 

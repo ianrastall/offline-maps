@@ -16,3 +16,11 @@ The app imports Jupiter.UI (`build/Jupiter.UI.targets`): shared resources, the a
    - The Rust core remains the authority for packages, validation, search and saved places. The web view only renders and reports map interactions (view changes, context menu, clicked saved places, shortcuts).
 2. **Keyboard shortcuts from the map (8 November 2026).** While the map has focus, WebView2 does not pass keys to the window's menu accelerators, so the page forwards the app's shortcuts (Ctrl+F, Ctrl+,, Ctrl+B, Ctrl+D, Ctrl+Shift+C, Ctrl+0, F11) to the shell. Browser accelerator keys are disabled.
 3. **Status bar truncation (8 November 2026).** Long status text (map and extras dates) is trimmed with an ellipsis at narrow window widths, as in Mix2DO. The same facts are in Map > Map information.
+
+## Android edition
+
+Decided 15 November 2026. Jupiter's standard and Jupiter.UI cover Windows desktop apps; there is no Android standard, so the phone app follows Android's own conventions and records its choices here.
+
+- **Stack:** Kotlin with Jetpack Compose for the interface; the Rust core through a JNI bridge (`crates/offline-maps-android`), the same core the Windows app uses.
+- **Map surface:** the Windows app's map page (`web/`, MapLibre GL JS) in Android's WebView, unchanged, as on Windows in WebView2. Chosen by Ian over MapLibre Native after the [Android renderer proof](android-renderer-proof.md). The same rules apply as on Windows: everything is answered locally for `https://map.local/` (page files from the APK, tiles and stations from the core), every other address is refused, navigation away is cancelled, and there is no TCP listener. `window.chrome.webview` is provided over a WebMessageListener so the page needs no Android-specific code.
+- **Distribution:** an APK on the GitHub releases (stage 6 of the plan). The Windows installer rule does not apply to it.
