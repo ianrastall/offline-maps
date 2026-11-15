@@ -363,6 +363,12 @@ Checked with real data in a separate store (`offline-maps-dev download --region 
 
 Not checked: the tooltip's appearance (its text was read from the page), and the light theme.
 
+Installed over 0.16.0 on Ian's machine and started from Start (0.17.0+89d5959): around Detroit the credits line reads "Terrain: Mapterhorn, USGS, NRCan, Copernicus", from Michigan's terrain of 12 November, with nothing downloaded again; Map information lists the USGS, Copernicus and Natural Resources Canada with their licences; Map > Regions gives Illinois "elevation data from USGS and Copernicus". Saved places and settings were unchanged and the log gained no lines.
+
+The release build was run as `pwsh -NoProfile -File build/build.ps1`: Ian's PowerShell profile puts an older .NET SDK (10.0.113, in `D:\lang\dotnet\sdk`) ahead of the one `global.json` needs (10.0.114 or later), and with it the interop tests do not start.
+
+Released 14 November 2026 as [v0.17.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.17.0), built from 89d5959; the installer's SHA-256 (cc0b6206…92353f76) matches GitHub's digest.
+
 ## 0.16.0: Labels and search in other scripts
 
 Completed 14 November 2026: stage W4 of the [worldwide plan](worldwide.md), started by Ian.
