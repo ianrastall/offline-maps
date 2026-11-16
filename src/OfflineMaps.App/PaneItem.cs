@@ -139,8 +139,16 @@ internal static class Format
     public static string Coordinates(double latitude, double longitude) =>
         string.Create(CultureInfo.InvariantCulture, $"{latitude:0.00000}, {longitude:0.00000}");
 
-    public static string Megabytes(ulong bytes) =>
-        string.Create(CultureInfo.CurrentCulture, $"{bytes / 1_000_000.0:0} MB");
+    /// <summary>
+    /// Whole megabytes; under one, to a tenth ("0.4 MB"), and at least "0.1 MB" for a file that is
+    /// not empty, since many prepared stations-and-addresses files are that small.
+    /// </summary>
+    public static string Megabytes(ulong bytes) => bytes switch
+    {
+        0 => string.Create(CultureInfo.CurrentCulture, $"{0} MB"),
+        < 1_000_000 => string.Create(CultureInfo.CurrentCulture, $"{Math.Max(bytes / 1_000_000.0, 0.1):0.0} MB"),
+        _ => string.Create(CultureInfo.CurrentCulture, $"{bytes / 1_000_000.0:0} MB"),
+    };
 
     /// <summary>"2026-11-08" as a long date in the person's format.</summary>
     public static string Date(string iso) =>
