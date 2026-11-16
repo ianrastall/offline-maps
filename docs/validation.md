@@ -357,7 +357,11 @@ Installed silently over 0.17.0 on Ian's machine (Settings > Apps lists 0.18.0; t
 
 The release build ran from a `pwsh -NoProfile` script with TEMP on D: (C: had little free space). Released 15 November 2026 as [v0.18.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.18.0), built from f4383e4; the installer's SHA-256 (2a94ad78…b6d1aa) matches GitHub's digest.
 
-Not covered: the rest of the world's prepared files, which are being built and published after this release (the app reads the manifest afresh, so it needs no new version for them; their sizes show in the Regions window from the next release); a scheduled rebuild.
+Not covered at release: the rest of the world's prepared files (see below); a scheduled rebuild.
+
+**The rest of the world, after the release (15–16 November).** The same tool, with TEMP on G:, built the 432 remaining regions in 4.1 hours from Geofabrik's extracts of 14–15 November; `publish.py` then uploaded them and the new manifest. The release now lists 536 of the 540 regions, 7.2 GB from 86.8 GB of extracts: Europe 229 (4.0 GB from 37.3 GB), North America 101 (1.8 from 21.6), Asia 88 (0.6 from 13.2), Australia and Oceania 36 (0.3 from 2.0), South America 16 (0.3 from 4.2), Africa 55 (0.2 from 8.0), Central America 11 (0.01 from 0.6). The largest are Taiwan (195 MB), New York (182 MB), California (146 MB) and Belgium (133 MB). The installed 0.18.0 finds them through the manifest; the Regions window shows their prepared sizes from the next release, whose size table lists them. Four regions failed the same checks the app applies, so the app cannot install their stations and addresses either (found here; not new in 0.18.0):
+- American Oceania west of 180°: the catalog's check points reach 176° E (the corners of the region's outline box), but Geofabrik's extract claims only to 169.9° E (Wake Island is the easternmost land west of the meridian), so the extract "does not match" the region. The east part, from the same extract, passes.
+- Ashmore and Cartier Islands, the Coral Sea Islands and Clipperton Island: uninhabited, so their extracts "contain no towns", which the check takes for a wrong file.
 
 ## Android: toolchain and core build
 
