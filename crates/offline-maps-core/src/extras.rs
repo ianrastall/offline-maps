@@ -1262,11 +1262,14 @@ pub fn update_extras(
 }
 
 /// The extract must be for this region: its header box covers the region's
-/// required points and lies inside the region's outer box.
+/// required points and lies inside the region's outer box. Stations or
+/// addresses with no town at all point to damaged data; an extract with none
+/// of the three is an uninhabited region (Clipperton Island, the Coral Sea
+/// Islands), whose stations and addresses are simply empty.
 fn check_coverage(extract: &Extract, region: &Region) -> Result<(), String> {
     check_box(extract.header.bbox, region)?;
-    if extract.towns.is_empty() {
-        return Err("The OpenStreetMap extract contains no towns".into());
+    if extract.towns.is_empty() && !(extract.stations.is_empty() && extract.addresses.is_empty()) {
+        return Err("The OpenStreetMap extract has stations or addresses but no towns".into());
     }
     Ok(())
 }
@@ -1331,12 +1334,13 @@ pub fn verify_prepared(path: &Path, region: &Region) -> Result<ExtrasRecord, Pac
     let count = |table: &str| -> Result<i64, PackageError> {
         Ok(db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))?)
     };
-    if count("towns")? == 0 {
-        return Err(invalid("the prepared file contains no towns"));
+    // As for a raw extract: no towns only in an uninhabited region.
+    if count("towns")? == 0 && (count("stations")? > 0 || record.stats.addresses > 0) {
+        return Err(invalid(
+            "the prepared file has stations or addresses but no towns",
+        ));
     }
-    for table in ["entries", "stations"] {
-        count(table)?;
-    }
+    count("entries")?;
     Ok(record)
 }
 

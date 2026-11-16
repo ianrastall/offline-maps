@@ -360,7 +360,7 @@ fn update_installs_replaces_and_keeps_only_stations() {
     assert_eq!((second.record.stats.charging, prune_pending), (0, 0));
     assert!(!store.version_dir(&id, &extras.version).exists());
 
-    // A file without towns is not this region's extract; nothing changes.
+    // A file with stations but no towns is damaged; nothing changes.
     transport.serve(sample(false, true), "\"x3\"");
     assert!(matches!(run(&mut |_| {}), Err(UpdateError::Invalid(_))));
     // Neither is a damaged file.
@@ -368,6 +368,34 @@ fn update_installs_replaces_and_keeps_only_stations() {
     assert!(matches!(run(&mut |_| {}), Err(UpdateError::Invalid(_))));
     assert!(!store.staging_file(&id).exists());
     assert_eq!(active_extras(&store, ILLINOIS.id).unwrap().unwrap(), second);
+}
+
+#[test]
+fn an_uninhabited_region_installs_empty() {
+    // Clipperton Island's extract: the right box, but no towns, stations or
+    // addresses. Its stations and addresses install, empty, and a prepared
+    // file made from it passes the same check.
+    let dir = TempDir::new();
+    let store = PackageStore::new(&dir.0);
+    let empty = write_pbf(&[&[E::Node(1, 40.15, -88.96, &[])][..]], FEATURES);
+    let transport = FakeTransport::new(empty, "\"e1\"");
+    let ExtrasOutcome::Activated { extras, .. } = update_extras(
+        &store,
+        &ILLINOIS,
+        &transport,
+        &options(),
+        &mut |_| {},
+        &AtomicBool::new(false),
+    )
+    .unwrap() else {
+        panic!("expected activation");
+    };
+    let stats = &extras.record.stats;
+    assert_eq!((stats.towns, stats.fuel, stats.addresses), (0, 0, 0));
+    let published = dir.0.join("empty-extras.sqlite");
+    fs::copy(&extras.path, &published).unwrap();
+    stamp_prepared(&published, &extras.record).unwrap();
+    assert!(verify_prepared(&published, &ILLINOIS).is_ok());
 }
 
 #[test]

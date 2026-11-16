@@ -219,13 +219,21 @@ def main():
         if slug in HANDWRITTEN:
             continue
         w, h = east - west, north - south
-        points = [
+        # The same points are checked against the map package and against the raw extract's
+        # header box, so they must lie inside both. A part of a region split at the 180th
+        # meridian reads the whole region's extract, whose box can stop short of the part's
+        # outline (American Oceania's ends at Wake Island, 169.9° E): keep the points inside
+        # it, 0.001° clear of its edges so that rounding to three places cannot push them out.
+        def inside(x, y):
+            return (min(max(x, xw + 0.001), xe - 0.001), min(max(y, xs + 0.001), xn - 0.001))
+
+        points = [inside(x, y) for x, y in [
             ((west + east) / 2, (south + north) / 2),
             (west + 0.1 * w, south + 0.1 * h),
             (east - 0.1 * w, south + 0.1 * h),
             (west + 0.1 * w, north - 0.1 * h),
             (east - 0.1 * w, north - 0.1 * h),
-        ]
+        ]]
         point_text = ", ".join(f"({x:.3f}, {y:.3f})" for x, y in points)
         lines += [
             f"pub const {const}: Region = Region {{",

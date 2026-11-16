@@ -341,6 +341,16 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.18.1: Stations and addresses for the last four regions
+
+Completed 16 November 2026, at Ian's request, for the four regions the world build of prepared files had shown could not get stations and addresses at all (see 0.18.0).
+
+- **American Oceania west of 180°.** `tools/make-regions.py` now keeps each region's check points inside the raw extract's header box as well as its outline box, 0.001° clear of the edges. Regenerated from the same inputs as 0.16.0, the catalog changed in two points only, both this region's: 176.164° E became 169.870° E (Geofabrik's extract ends at Wake Island). Its map package, cut at 180°, still covers them.
+- **Uninhabited regions.** An extract (or prepared file) with no towns is accepted when it also has no stations and no addresses: Ashmore and Cartier Islands, the Coral Sea Islands and Clipperton Island install empty. Stations or addresses without any town are still refused as damaged data.
+- **Published.** Their prepared files were built (American Oceania west 0.4 MB; the three islands 68 KB each, empty tables) and uploaded: the `extras` release now lists all 540 regions, 7.2 GB. The installed 0.18.0 refuses these four as before (its checks are the old ones); 0.18.1 accepts them.
+- **Sizes.** The catalog's size table lists all 540 prepared files, so Map > Regions shows prepared sizes everywhere.
+- **Tests.** 88 core (new: an uninhabited region's extract installs empty and its prepared file passes the check), 2 HTTP, 7 ABI and 11 interop tests. Against the published release the interop test installed Ashmore and Cartier's empty prepared file; with every region listed, the fallback check has no region left to try and is skipped.
+
 ## 0.18.0: Prepared stations and addresses
 
 Completed 15 November 2026: the stations-and-addresses part of stage 5 of the [North America and Android plan](north-america-and-android.md#5-prepared-bundles-on-the-release-page), begun the evening before. How it works is in [sources](sources-and-architecture.md#prepared-stations-and-addresses-0180).
@@ -359,7 +369,7 @@ The release build ran from a `pwsh -NoProfile` script with TEMP on D: (C: had li
 
 Not covered at release: the rest of the world's prepared files (see below); a scheduled rebuild.
 
-**The rest of the world, after the release (15–16 November).** The same tool, with TEMP on G:, built the 432 remaining regions in 4.1 hours from Geofabrik's extracts of 14–15 November; `publish.py` then uploaded them and the new manifest. The release now lists 536 of the 540 regions, 7.2 GB from 86.8 GB of extracts: Europe 229 (4.0 GB from 37.3 GB), North America 101 (1.8 from 21.6), Asia 88 (0.6 from 13.2), Australia and Oceania 36 (0.3 from 2.0), South America 16 (0.3 from 4.2), Africa 55 (0.2 from 8.0), Central America 11 (0.01 from 0.6). The largest are Taiwan (195 MB), New York (182 MB), California (146 MB) and Belgium (133 MB). The installed 0.18.0 finds them through the manifest; the Regions window shows their prepared sizes from the next release, whose size table lists them. Four regions failed the same checks the app applies, so the app cannot install their stations and addresses either (found here; not new in 0.18.0):
+**The rest of the world, after the release (15–16 November).** The same tool, with TEMP on G:, built the 432 remaining regions in 4.1 hours from Geofabrik's extracts of 14–15 November; `publish.py` then uploaded them and the new manifest. The release now lists 536 of the 540 regions, 7.2 GB from 86.8 GB of extracts: Europe 229 (4.0 GB from 37.3 GB), North America 101 (1.8 from 21.6), Asia 88 (0.6 from 13.2), Australia and Oceania 36 (0.3 from 2.0), South America 16 (0.3 from 4.2), Africa 55 (0.2 from 8.0), Central America 11 (0.01 from 0.6). The largest are Taiwan (195 MB), New York (182 MB), California (146 MB) and Belgium (133 MB). The installed 0.18.0 finds them through the manifest; the Regions window shows their prepared sizes from the next release, whose size table lists them. Four regions failed the same checks the app applies, so the app could not install their stations and addresses either (found here; not new in 0.18.0; fixed in 0.18.1):
 - American Oceania west of 180°: the catalog's check points reach 176° E (the corners of the region's outline box), but Geofabrik's extract claims only to 169.9° E (Wake Island is the easternmost land west of the meridian), so the extract "does not match" the region. The east part, from the same extract, passes.
 - Ashmore and Cartier Islands, the Coral Sea Islands and Clipperton Island: uninhabited, so their extracts "contain no towns", which the check takes for a wrong file.
 

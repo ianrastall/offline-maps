@@ -298,9 +298,9 @@ pub const AMERICAN_OCEANIA_W: Region = Region {
     required_points: &[
         (160.818, 15.964),
         (145.472, 11.116),
-        (176.164, 11.116),
+        (169.870, 11.116),
         (145.472, 20.813),
-        (176.164, 20.813),
+        (169.870, 20.813),
     ],
     country: "American Oceania",
     continent: "Australia and Oceania",
