@@ -351,6 +351,8 @@ Completed 16 November 2026, at Ian's request, for the four regions the world bui
 - **Sizes.** The catalog's size table lists all 540 prepared files, so Map > Regions shows prepared sizes everywhere. Sizes under 1 MB are shown to a tenth ("About 0.4 MB"); before, whole megabytes made many small prepared files "About 0 MB" (seen in the installed build of 2bf3be9).
 - **Tests.** 88 core (new: an uninhabited region's extract installs empty and its prepared file passes the check), 2 HTTP, 7 ABI and 11 interop tests. Against the published release the interop test installed Ashmore and Cartier's empty prepared file; with every region listed, the fallback check has no region left to try and is skipped.
 
+Installed silently over 0.18.0 on Ian's machine (0.18.1+434a34e; Settings > Apps lists 0.18.1); saved places and settings byte-for-byte unchanged. Started from Start, the Regions window (read through UI Automation, nothing downloaded, the copy closed afterwards) showed for stations and addresses: Île de Clipperton and the Coral Sea Islands "About 0.1 MB to download, prepared for Offline Maps"; American Oceania west of 180° "About 0.4 MB"; Afghanistan "About 0.9 MB" (113 MB in 0.18.0). Released 16 November 2026 as [v0.18.1](https://github.com/ianrastall/offline-maps/releases/tag/v0.18.1), built from 434a34e; the installer's SHA-256 (0a12f00a…d7d534) matches GitHub's digest.
+
 ## 0.18.0: Prepared stations and addresses
 
 Completed 15 November 2026: the stations-and-addresses part of stage 5 of the [North America and Android plan](north-america-and-android.md#5-prepared-bundles-on-the-release-page), begun the evening before. How it works is in [sources](sources-and-architecture.md#prepared-stations-and-addresses-0180).
