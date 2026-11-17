@@ -131,6 +131,8 @@ The search index is built on the user's computer from the map, so it is not down
 - The phone verifies each file with the same SHA-256 and structural checks before activating it, and keeps the previous working copy until then, as the desktop does.
 - Saved places travel both ways.
 
+**Saved-place exchange implemented for Android 0.3.0, 17 November 2026.** The phone exports/imports portable JSON through its document picker, with validated preview, additive merge and exact-duplicate skipping. Names/notes can be edited and coordinates entered manually offline. This repository's `offline-maps-dev places-export` and `places-import` commands exchange the same format with a closed desktop store; the Windows UI is unchanged. Phone-to-desktop roundtrip and desktop-to-phone import passed, with original phone entries intact after test cleanup. See [setup and verification](android-app.md#android-030-saved-place-backups-and-preparation). Transfer-folder replacement of installed map regions remains open.
+
 ### 8. Phone downloads directly (optional)
 
 Downloading on the phone when it is online, with a Wi-Fi-only setting and a storage check. Reading the raw extracts for stations and addresses is slow and drains the battery on a phone, so the phone downloads the prepared bundles from stage 5 instead.

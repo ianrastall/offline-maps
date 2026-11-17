@@ -37,7 +37,7 @@ fun SavedPlacesDialog(model: MapModel, onShow: (JSONObject) -> Unit, onDismiss: 
                 }
                 Text("Backups include names, notes and coordinates. Imports keep existing places and skip exact duplicates.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 8.dp), label = { Text("Filter saved places") }, singleLine = true)
-                Text("${places.size} saved places", style = MaterialTheme.typography.bodySmall)
+                Text(countText(places.size, "saved place"), style = MaterialTheme.typography.bodySmall)
                 PlaceMessages(model)
                 LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                     val filtered = places.filter { "${it.getString("name")} ${it.optString("note")}".contains(query.trim(), ignoreCase = true) }
@@ -61,7 +61,7 @@ fun SavedPlacesDialog(model: MapModel, onShow: (JSONObject) -> Unit, onDismiss: 
     model.placesPreview?.let { preview ->
         AlertDialog(onDismissRequest = { if (model.busy == null) model.cancelPlacesImport() }, title = { Text("Import saved places?") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${preview.getInt("added")} new places. ${preview.getInt("skipped")} exact duplicates will be skipped. Existing places stay unchanged.")
+                Text("${countText(preview.getInt("added"), "new place")}. ${countText(preview.getInt("skipped"), "exact duplicate")} will be skipped. Existing places stay unchanged.")
                 Text("Entries with a changed name or note are kept separately.", style = MaterialTheme.typography.bodySmall)
                 PlaceMessages(model)
             } },
@@ -69,6 +69,8 @@ fun SavedPlacesDialog(model: MapModel, onShow: (JSONObject) -> Unit, onDismiss: 
             dismissButton = { TextButton(onClick = model::cancelPlacesImport, enabled = model.busy == null) { Text("Cancel") } })
     }
 }
+
+fun countText(count: Int, singular: String) = "$count $singular${if (count == 1) "" else "s"}"
 
 @Composable
 private fun PlaceMessages(model: MapModel) {

@@ -185,7 +185,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
             refresh()
             main.post {
                 cancelPlacesImport()
-                notice = "Added ${result.getInt("added")} places; skipped ${result.getInt("skipped")} exact duplicates."
+                notice = "Added ${countText(result.getInt("added"), "place")}; skipped ${countText(result.getInt("skipped"), "exact duplicate")}."
             }
         }
     }
