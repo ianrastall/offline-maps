@@ -111,6 +111,11 @@ pub fn status_json(status: &pb::Status, overview: bool) -> Value {
         "regions": status.regions.iter().filter(|r| r.map.is_some()).map(|r| json!({
             "id": r.id, "name": r.name, "date": r.map.as_ref().map(|m| &m.data_date),
             "extras": r.extras.is_some(), "terrain": r.terrain.is_some(), "overlays": r.overlays.is_some(),
+            "extrasDate": r.extras.as_ref().map(|e| &e.data_date),
+            "terrainDate": r.terrain.as_ref().map(|t| &t.data_date),
+            "floodEffective": r.overlays.as_ref().map(|o| &o.flood_effective),
+            "overlayBuilt": r.overlays.as_ref().map(|o| &o.built_at),
+            "publicLands": r.overlays.as_ref().map(|o| &o.public_lands),
         })).collect::<Vec<_>>(),
         "placesProblem": status.places_problem,
         "searchReady": status.search_ready,

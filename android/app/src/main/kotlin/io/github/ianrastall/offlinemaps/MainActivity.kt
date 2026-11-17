@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
                             }
                             override fun onError(message: String) { model.error = message }
                             override fun onGesture() { model.following = false }
+                            override fun onRegion(id: String) { downloadRegion = id; panel = "downloads" }
                             override fun onRendererGone() {
                                 model.page = null
                                 model.error = "The map renderer stopped and is being reloaded."

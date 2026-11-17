@@ -69,13 +69,16 @@ fun DownloadsDialog(model: MapModel, initialRegion: String?, onDismiss: () -> Un
                         }
                         item { DownloadOption(model, selected, 1, "Road map and search", "Includes the offline search index, prepared on this phone.", selected.getLong("mapBytes"), state != null, true) }
                         if (selected.getLong("extrasBytes") > 0) item {
-                            DownloadOption(model, selected, 2, "Stations and addresses", "Fuel, charging, street addresses and outdoor places.", selected.getLong("extrasBytes"), state?.optBoolean("extras") == true, state != null)
+                            DownloadOption(model, selected, 2, "Stations and addresses", "Fuel, charging, street addresses and outdoor places.", selected.getLong("extrasBytes"), state?.optBoolean("extras") == true, state != null,
+                                metadataText(state, "extrasDate", "Data date"))
                         }
                         if (selected.getLong("terrainBytes") > 0) item {
-                            DownloadOption(model, selected, 3, "Terrain", "Hillshading and contour lines.", selected.getLong("terrainBytes"), state?.optBoolean("terrain") == true, state != null)
+                            DownloadOption(model, selected, 3, "Terrain", "Hillshading and contour lines.", selected.getLong("terrainBytes"), state?.optBoolean("terrain") == true, state != null,
+                                metadataText(state, "terrainDate", "Archive date"))
                         }
                         if (selected.getLong("overlayBytes") > 0) item {
-                            DownloadOption(model, selected, 4, "Flood zones and public lands", "Mapped hazard areas and public-access lands; not current flooding.", selected.getLong("overlayBytes"), state?.optBoolean("overlays") == true, state != null)
+                            DownloadOption(model, selected, 4, "Flood zones and public lands", "Mapped hazard areas and public-access lands; not current flooding.", selected.getLong("overlayBytes"), state?.optBoolean("overlays") == true, state != null,
+                                listOfNotNull(metadataText(state, "floodEffective", "Flood effective date"), metadataText(state, "publicLands", "Public lands"), metadataText(state, "overlayBuilt", "Layer build")).joinToString("\n").ifEmpty { null })
                         }
                         if (state == null) item { Text("Download the road map before adding optional layers.", style = MaterialTheme.typography.bodySmall) }
                         item { Text("Maps: © OpenStreetMap contributors, from Geofabrik or this project's releases. Terrain: Mapterhorn. US flood zones and public lands: FEMA and USGS.", style = MaterialTheme.typography.bodySmall) }
@@ -108,7 +111,7 @@ fun DownloadsDialog(model: MapModel, initialRegion: String?, onDismiss: () -> Un
 }
 
 @Composable
-private fun DownloadOption(model: MapModel, region: JSONObject, target: Int, title: String, detail: String, bytes: Long, installed: Boolean, available: Boolean) {
+private fun DownloadOption(model: MapModel, region: JSONObject, target: Int, title: String, detail: String, bytes: Long, installed: Boolean, available: Boolean, installedDetail: String? = null) {
     val resume = model.downloads.pending == DownloadRequest(region.getString("id"), target)
     Column {
         Row {
@@ -121,9 +124,13 @@ private fun DownloadOption(model: MapModel, region: JSONObject, target: Int, tit
             }
         }
         Text(detail, style = MaterialTheme.typography.bodySmall)
+        if (installedDetail != null) Text(installedDetail, style = MaterialTheme.typography.bodySmall)
         HorizontalDivider(Modifier.padding(top = 12.dp))
     }
 }
+
+private fun metadataText(state: JSONObject?, key: String, label: String): String? =
+    state?.optString(key)?.takeIf { it.isNotBlank() && it != "null" }?.let { "$label: $it" }
 
 @Composable
 fun DownloadProgress(downloads: RegionDownloads) {

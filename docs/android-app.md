@@ -51,7 +51,7 @@ After ADB disappeared, the final release APK was copied through Windows MTP into
 
 Distribution review, 17 November: Google's [developer-verification timeline](https://developer.android.com/developer-verification) begins enforcement in Brazil, Indonesia, Singapore and Thailand on 30 September 2026, with global expansion in 2027 and beyond; its [FAQ](https://developer.android.com/developer-verification/guides/faq) describes ADB and an advanced sideload flow for unregistered apps. This preview has a local release-signing identity and no developer-console registration. Broader public distribution should revisit those requirements when their rollout reaches the target users.
 
-## Android 0.2.0: direct downloads (in progress)
+## Android 0.2.0: direct downloads
 
 Ian chose direct phone downloads as the next milestone on 17 November. The download browser lists the local catalog's 540 regions, searchable by region, country or continent, with approximate sizes and installed status. Maps > Download maps opens it; selecting an installed region in Maps opens its update controls. Maps include a search index built on the phone; stations/addresses, terrain and US overlays are separate optional downloads. Existing maps remain active while a replacement is downloaded and prepared.
 
@@ -59,4 +59,14 @@ Wi-Fi only is the default and is saved between launches. Each transfer is bound 
 
 Android sets the new optional `Config.prepared_extras_only` flag. An unavailable or invalid prepared stations-and-addresses file produces an error rather than a raw-extract download/extraction. Windows keeps its existing fallback because the flag defaults to false. Android also builds its search databases beside their private destination; its global temporary folder is not writable by ordinary apps. The WebView still refuses remote origins; internet access is for the core's explicitly requested downloads.
 
-Current verification: all 105 Rust workspace tests pass, including the prepared-only fallback regression; formatting, Clippy with warnings denied, and Android debug build/lint pass. The Android 16 emulator downloaded the real District of Columbia map over HTTPS, verified it, built search on private storage and activated it with data date 17 November. Its prepared stations-and-addresses download also activated successfully. Optional terrain/overlays, pause/resume/network loss, offline search of directly downloaded data and a signed real-phone upgrade remain under verification. This section describes unreleased work until that delivery is recorded.
+The download details show each installed layer's date, including the flood effective date and overlay build date. Selecting an uninstalled region on the overview opens its download controls.
+
+Verification on 17 November 2026:
+
+- All 105 Rust workspace tests pass, including the prepared-only fallback regression; formatting and Clippy with warnings denied pass. All 11 Windows interop tests pass. Android debug and signed release builds and lint pass. The release uses the same signing certificate as 0.1.0.
+- The Android 16 emulator downloaded the real District of Columbia map over HTTPS, verified it, built a 28,014-entry search index in private storage and activated it with data date 17 November. Prepared stations/addresses, terrain and US overlays each downloaded and activated separately.
+- With airplane mode on, Wi-Fi and mobile data off, and Android reporting no active default network, the newly downloaded data found McPherson Square and 1600 Pennsylvania Avenue Northwest. Selecting the address rendered the detailed map, terrain and overlays offline.
+- An Illinois map update retained its old active version when Wi-Fi was removed. Wi-Fi-only refused a resume without Wi-Fi, preserving the staged bytes. Restoring Wi-Fi resumed from those bytes. Leaving the app paused the transfer at about 309 MB; a force-stop/restart retained that pending transfer. Resume continued at that offset, finished search preparation and only then activated the new map. The installed Illinois map date became 17 November.
+- On an emulator cellular-only connection, turning off Wi-Fi only explicitly allowed a native update check, which returned that the installed DC map was up to date. Wi-Fi only was restored afterward. This does not measure carrier billing or real-phone cellular behavior.
+
+The Galaxy S26 FE is disconnected, so installing 0.2.0 over its signed 0.1.0 and a direct download on that physical phone remain pending. Its earlier offline map/GPS verification above is for 0.1.0. This milestone supports foreground downloads; background transfers, transfer-folder replacement of installed regions, saved-place exchange and routing remain later work. Cold offline GPS acquisition and extended field/battery checks also remain open.

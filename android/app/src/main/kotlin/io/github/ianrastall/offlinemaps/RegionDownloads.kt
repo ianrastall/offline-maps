@@ -132,7 +132,10 @@ class RegionDownloads(
             check(foreground) { "Keep Offline Maps open while downloading." }
             check(request.target in 1..4) { "Unknown download type." }
             val maps = File(context.noBackupFilesDir, "maps")
-            val needed = Math.addExact(Math.multiplyExact(estimatedBytes.coerceAtLeast(0), if (request.target == 1) 2L else 1L), 256L shl 20)
+            // A resumed transfer already occupies staging space. Let the core
+            // check the exact remaining bytes against the server's current file.
+            val needed = if (pending == request) 256L shl 20 else
+                Math.addExact(Math.multiplyExact(estimatedBytes.coerceAtLeast(0), if (request.target == 1) 2L else 1L), 256L shl 20)
             check(maps.usableSpace >= needed) { "Not enough free space to download and prepare this file. Allow about ${sizeText(needed)}." }
             network()
         }.getOrElse { error = it.message; return }
@@ -154,19 +157,18 @@ class RegionDownloads(
             connectivity.bindProcessToNetwork(previous)
             // Cancellation can arrive just as atomic activation completes. Report
             // successful activation as success rather than a fictitious pause.
-            if (result.isSuccess) {
-                changed()
-            }
+            val refreshFailure = if (result.isSuccess) runCatching(changed).exceptionOrNull() else null
             main.post {
                 if (job !== current) return@post
                 main.removeCallbacks(poll)
                 job = null; active = false; fraction = null
                 result.onSuccess { data ->
                     pending = null; preferences.edit().remove("pending").apply()
-                    notice = if (data.optBoolean("upToDate")) "The installed file is up to date." else "The download is ready offline."
+                    notice = if (refreshFailure != null) "The file is ready. Reopen Offline Maps to refresh the display."
+                        else if (data.optBoolean("upToDate")) "The installed file is up to date." else "The download is ready offline."
                 }.onFailure {
                     if (current.cancelled.get()) notice = current.pauseReason
-                    else error = (it.message ?: "Download failed.") + " You can retry or resume this download."
+                    else error = (it.message ?: "Download failed.").removePrefix("Rust error: ") + " You can retry or resume this download."
                 }
             }
         }

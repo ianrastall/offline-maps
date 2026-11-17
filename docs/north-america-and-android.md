@@ -135,6 +135,8 @@ The search index is built on the user's computer from the map, so it is not down
 
 Downloading on the phone when it is online, with a Wi-Fi-only setting and a storage check. Reading the raw extracts for stations and addresses is slow and drains the battery on a phone, so the phone downloads the prepared bundles from stage 5 instead.
 
+**Implemented for Android 0.2.0, 17 November 2026.** Ian chose direct downloads as the next milestone. The phone browses all 540 regions, downloads maps and optional prepared layers, builds search in its private storage and updates imported regions without replacing the active copy until verification succeeds. Wi-Fi only is the default; downloads are bound to the selected network. They pause when the app leaves the foreground or the connection is lost, and remember the pending region/layer across process restarts. Real DC downloads of all four layer types, offline address search/rendering, interrupted Illinois update/resume, and explicit mobile-data opt-in passed on the emulator. The signed Galaxy upgrade/direct-download check remains pending while the phone is disconnected. See [the verification record](android-app.md#android-020-direct-downloads).
+
 ### 9. Later
 
 - **Routing** on both platforms. A separate decision: it needs a routing graph per region (a large derived file) and an engine such as Valhalla, GraphHopper or OSRM.
@@ -144,7 +146,7 @@ Downloading on the phone when it is online, with a Wi-Fi-only setting and a stor
 
 1. The new name: decided 11 November 2026, Offline North American Maps.
 2. Publishing self-built OpenStreetMap tiles (required for Canada and Alaska; see licensing): accepted 11 November 2026, in the `regions` release.
-3. Whether the first Android version receives maps only from the desktop, or also downloads directly. On 15 November 2026 Ian leaned towards a phone that downloads for itself, perhaps limited to one region; not yet decided. Prepared files (stage 5) remove the heavy processing, so the limit on the phone is storage, not the number of regions. The search index is still built from the map on the computer and would need to be published or built on the phone.
+3. **Decided 17 November 2026:** the first Android preview imports desktop regions; 0.2.0 adds direct downloads. There is no one-region limit. Prepared files (stage 5) avoid raw-extract processing, and search is built from the downloaded map on the phone. Storage limits how many regions fit.
 4. Android distribution: GitHub APK only, or F-Droid too.
 5. Whether overlays outside the US are wanted.
 6. Phone platforms: decided 11 November 2026, Android only (see stage 6).

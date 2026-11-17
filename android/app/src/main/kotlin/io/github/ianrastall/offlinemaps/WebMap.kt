@@ -43,6 +43,7 @@ class WebMap(
         fun onSave(latitude: Double, longitude: Double)
         fun onPlace(id: Long)
         fun onRendererGone()
+        fun onRegion(id: String)
     }
 
     val view = WebView(context)
@@ -117,7 +118,7 @@ class WebMap(
             "gesture" -> listener.onGesture()
             "contextmenu" -> listener.onSave(data.getDouble("latitude"), data.getDouble("longitude"))
             "place" -> listener.onPlace(data.getLong("id"))
-            "region" -> listener.onError("Import this region from the desktop to see its detailed map.")
+            "region" -> listener.onRegion(data.getString("id"))
         }
     }
 
