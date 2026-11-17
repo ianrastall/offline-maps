@@ -915,6 +915,25 @@ impl Service {
         self.with_places(|places| places.remove(id).map_err(places_error))
     }
 
+    pub fn export_places(&self) -> Outcome<String> {
+        self.with_places(|places| places.export_json().map_err(places_error))
+    }
+
+    pub fn import_places(
+        &self,
+        text: &str,
+        apply: bool,
+    ) -> Outcome<offline_maps_core::places::PlaceImport> {
+        self.with_places(|places| {
+            if apply {
+                places.import_json(text)
+            } else {
+                places.preview_import(text)
+            }
+            .map_err(places_error)
+        })
+    }
+
     /// Keeps the unreadable file under a new name and starts an empty list.
     pub fn reset_places(&self) -> Outcome<()> {
         let mut guard = lock(&self.places);

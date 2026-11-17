@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
                 selected?.let { place ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(place.optString("name"), Modifier.weight(1f).padding(vertical = 12.dp))
-                        TextButton(onClick = { saveAt = place; saveName = place.optString("name") }) { Text("Save") }
+                        TextButton(onClick = { saveAt = place; saveName = place.optString("name") }) { Text(if (place.has("id")) "Edit" else "Save") }
                         TextButton(onClick = { selected = null }) { Text("Close") }
                     }
                 }
@@ -218,13 +218,13 @@ class MainActivity : ComponentActivity() {
                     if (model.downloads.active) DownloadProgress(model.downloads) else LinearProgressIndicator(Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                         Text(phase, Modifier.weight(1f).padding(vertical = 12.dp))
-                        if (ready) TextButton(onClick = { model.cancelWork() }) { Text(if (model.downloads.active) "Pause" else "Cancel") }
+                        if (ready && model.canCancelWork) TextButton(onClick = { model.cancelWork() }) { Text(if (model.downloads.active) "Pause" else "Cancel") }
                     }
                 }
-                model.downloads.notice?.let { message ->
+                (model.notice ?: model.downloads.notice)?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                         Text(message, Modifier.weight(1f).padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = { model.downloads.notice = null }) { Text("Dismiss") }
+                        TextButton(onClick = { model.notice = null; model.downloads.notice = null }) { Text("Dismiss") }
                     }
                 }
                 Text(model.gpsText, Modifier.fillMaxWidth().clickable {
@@ -258,26 +258,13 @@ class MainActivity : ComponentActivity() {
             }, confirmButton = { TextButton(onClick = { downloadRegion = null; panel = "downloads" }) { Text("Download maps") } },
             dismissButton = { TextButton(onClick = { panel = null }) { Text("Close") } })
         if (panel == "downloads") DownloadsDialog(model, downloadRegion) { panel = null }
-        if (panel == "saved") AlertDialog(onDismissRequest = { panel = null }, title = { Text("Saved places") },
-            text = {
-                LazyColumn {
-                    val places = model.status!!.getJSONArray("places").objects()
-                    if (places.isEmpty()) item { Text("Use Save GPS, save a search result, or press and hold the map to save a place.") }
-                    items(places) { place ->
-                        Row {
-                            TextButton(onClick = { model.show(place); selected = place; panel = null }, modifier = Modifier.weight(1f)) { Text(place.getString("name")) }
-                            TextButton(onClick = { model.remove(place) }) { Text("Remove") }
-                        }
-                    }
-                }
-            }, confirmButton = { TextButton(onClick = { panel = null }) { Text("Close") } })
-        if (saveAt != null) AlertDialog(onDismissRequest = { saveAt = null }, title = { Text("Save place") },
-            text = { OutlinedTextField(saveName, { saveName = it.take(200) }, label = { Text("Name") }, singleLine = true) },
-            confirmButton = { TextButton(onClick = {
-                val at = saveAt!!
-                model.save(saveName.trim(), at.getDouble("latitude"), at.getDouble("longitude")); saveAt = null
-            }, enabled = saveName.isNotBlank()) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { saveAt = null }) { Text("Cancel") } })
+        if (panel == "saved") SavedPlacesDialog(model,
+            onShow = { place -> model.show(place); selected = place; panel = null },
+            onDismiss = { model.cancelPlacesImport(); panel = null })
+        saveAt?.let { at ->
+            val initial = remember(at) { JSONObject(at.toString()).put("name", saveName) }
+            PlaceEditor(model, initial) { saveAt = null; if (initial.has("id")) selected = null }
+        }
         if (panel == "about") AlertDialog(onDismissRequest = { panel = null }, title = { Text("Offline Maps ${BuildConfig.VERSION_NAME}") },
             text = { Text(remember { assets.open("notices/THIRD-PARTY-NOTICES.txt").bufferedReader().use { it.readText() } }, Modifier.verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton(onClick = { panel = null }) { Text("Close") } })

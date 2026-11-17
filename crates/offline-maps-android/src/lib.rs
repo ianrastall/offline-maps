@@ -282,6 +282,7 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_add
     _class: JClass<'local>,
     handle: jlong,
     name: JString<'local>,
+    note: JString<'local>,
     latitude: jdouble,
     longitude: jdouble,
 ) {
@@ -289,13 +290,69 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_add
         .with_env(|env| -> Result<()> {
             unsafe { service(handle) }?.add_place(&pb::AddPlace {
                 name: name.try_to_string(env)?,
-                note: String::new(),
+                note: note.try_to_string(env)?,
                 position: Some(pb::Position {
                     latitude,
                     longitude,
                 }),
             })?;
             Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_updatePlace<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    id: jlong,
+    name: JString<'local>,
+    note: JString<'local>,
+) {
+    unowned
+        .with_env(|env| -> Result<()> {
+            unsafe { service(handle) }?.update_place(&pb::UpdatePlace {
+                id: id as u64,
+                name: name.try_to_string(env)?,
+                note: note.try_to_string(env)?,
+            })?;
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_exportPlaces<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let backup = unsafe { service(handle) }?.export_places()?;
+            text(env, &backup)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_importPlaces<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    backup: JString<'local>,
+    apply: jni::sys::jboolean,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let backup = backup.try_to_string(env)?;
+            let result = unsafe { service(handle) }?.import_places(&backup, apply)?;
+            text(env, &json!(result).to_string())
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }

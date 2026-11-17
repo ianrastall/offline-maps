@@ -16,6 +16,9 @@
 //!       it is missing; uses the store's active extras unless --extras is given)
 //!   offline-maps-dev extract <file.osm.pbf> <extras.sqlite>
 //!   offline-maps-dev terrain-size <west> <south> <east> <north>
+//!   offline-maps-dev places-export <store-dir> <new-backup.json>
+//!   offline-maps-dev places-import <store-dir> <backup.json> [--apply]
+//!       (close the desktop app first; import previews unless --apply is given)
 //!       (reads only Mapterhorn's index; prints tiles and bytes at zoom 0-12)
 //!   offline-maps-dev terrain-sources <terrain_sources_data.rs> <terrain-sources.txt>
 //!       (writes each catalog region's terrain sources from Mapterhorn's coverage
@@ -278,6 +281,8 @@ fn main() -> ExitCode {
         Some("probe") => probe(args.get(1).map_or(ILLINOIS.package_url, String::as_str)),
         Some("index") => index(&args[1..]),
         Some("search") => search(&args[1..]),
+        Some("places-export") if args.len() == 3 => places_transfer(&args[1..], false),
+        Some("places-import") if args.len() == 3 || (args.len() == 4 && args[3] == "--apply") => places_transfer(&args[1..], true),
         Some("extract") => extract(&args[1..]),
         Some("terrain-size") => terrain_size(&args[1..]),
         Some("terrain-sources") => terrain_sources::run(&args[1..]),
@@ -298,6 +303,40 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn places_transfer(args: &[String], import: bool) -> Result<(), String> {
+    use offline_maps_core::places::{MAX_BACKUP_BYTES, SavedPlaces};
+    use std::path::Path;
+    let mut places = SavedPlaces::open(Path::new(&args[0])).map_err(|e| e.to_string())?;
+    let path = Path::new(&args[1]);
+    if import {
+        if std::fs::metadata(path).map_err(|e| e.to_string())?.len() > MAX_BACKUP_BYTES as u64 {
+            return Err("Saved-place backups are limited to 16 MB.".into());
+        }
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        let apply = args.get(2).is_some_and(|a| a == "--apply");
+        let result = if apply {
+            places.import_json(&text)
+        } else {
+            places.preview_import(&text)
+        }
+        .map_err(|e| e.to_string())?;
+        println!(
+            "{}: {} new places, {} exact duplicates skipped. Existing places kept.",
+            if apply { "Imported" } else { "Preview" },
+            result.added,
+            result.skipped
+        );
+    } else {
+        if path.exists() {
+            return Err("Choose a new backup filename; the existing file was not changed.".into());
+        }
+        let text = places.export_json().map_err(|e| e.to_string())?;
+        offline_maps_core::store::write_atomic(path, text.as_bytes()).map_err(|e| e.to_string())?;
+        println!("Exported {} saved places.", places.list().len());
+    }
+    Ok(())
 }
 
 type Options = (PathBuf, HashMap<String, String>);

@@ -84,3 +84,28 @@ The Samsung's offline acceptance exposed a connection label that could remain at
 Verification: debug and signed release builds, lint and the GPS marker regression pass. The signed patch installed over 0.2.0 on the Galaxy S26 FE, with both maps/all layers and the saved-place list retained. The installed APK matches the release SHA-256. With the phone still in airplane mode and no active network, the connection label now correctly says "Connect to Wi-Fi before downloading." On the emulator, keeping the download browser open across Wi-Fi loss changed the label from connected to unavailable; restoring Wi-Fi changed it back without reopening the screen.
 
 The patch also found McPherson Square in the downloaded DC data with Android still reporting no active network. Selecting it rendered labeled roads, route shields, station/outdoor-place symbols, public-land shading and attribution locally. No new saved place was created during this check.
+
+## Android 0.3.0: saved-place backups and preparation
+
+This milestone adds Saved > Add place for decimal latitude/longitude, names and notes; editing existing names/notes; filtering by either; and confirmed removal. Coordinates use north/east positive and south/west negative. Latitude must be -90 to 90 and longitude -180 to 180. The saved-place list identifies points outside installed detailed maps.
+
+Saved > Export writes a JSON backup through Android's document picker. Saved > Import reads one, validates the entire file and previews the new/duplicate counts before confirmation. It merges without replacing existing places, reassigns imported IDs locally, preserves timestamps, and skips exact name/note/coordinate matches. Changed names or notes remain separate entries. A failed validation or write leaves both memory and the saved file unchanged. No network is needed. Backups include the user's coordinates and notes; they stay wherever the user chooses in the file picker.
+
+The portable backup uses the same schema as the desktop's `saved-places.json`. Names are limited to 120 Unicode characters, notes to 2,000; lists to 10,000 entries and portable files to 16 MB. Unsupported schema versions, invalid coordinates/IDs and malformed JSON are rejected before committing any entry. The core commits an accepted merge with one atomic file replacement. A repeat import that adds nothing does not rewrite the file.
+
+### Desktop exchange
+
+The Windows UI is unchanged in this Android release. Close the Windows app before using this repository's checked command-line helper against its map store, so it cannot retain a stale in-memory place list. Substitute the actual store directory (shown in Windows Settings) for `G:\Maps`:
+
+```powershell
+# Export a new backup, then copy it to the phone over USB and choose Saved > Import.
+cargo run --locked -p offline-maps-dev -- places-export G:\Maps D:\Transfers\desktop-places.json
+
+# Copy a phone export over USB. Preview first; --apply performs the merge.
+cargo run --locked -p offline-maps-dev -- places-import G:\Maps D:\Transfers\phone-places.json
+cargo run --locked -p offline-maps-dev -- places-import G:\Maps D:\Transfers\phone-places.json --apply
+```
+
+Export refuses an existing output filename. Import preserves existing desktop entries and does not change map packages. Reopen the Windows app afterward to load the merged list. A desktop `saved-places.json` copied to a separate file can also be imported directly on the phone; never replace the active desktop file with a phone export to merge it.
+
+Initial verification: 109 Rust tests pass, including four new backup/merge tests covering preview, ID reassignment, repeated imports, altered notes, Unicode/multiline notes, invalid inputs, capacity, failed writes and preservation. Formatting and Clippy with warnings denied pass. Android debug build/lint and the GPS marker regression pass. On the Android 16 emulator, a latitude of 91 was rejected; valid coordinates with a note were saved and exported through the real document picker. That exported file was previewed/imported by the desktop helper, exported back, and repeat-imported without adding duplicates. Device acceptance and release delivery are recorded below when complete.

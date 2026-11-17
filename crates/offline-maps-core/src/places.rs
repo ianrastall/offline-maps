@@ -20,6 +20,14 @@ pub const PLACES_SCHEMA: u32 = 1;
 pub const MAX_PLACES: usize = 10_000;
 pub const MAX_NAME_CHARS: usize = 120;
 pub const MAX_NOTE_CHARS: usize = 2_000;
+/// Bound portable backups before parsing them, including on phones.
+pub const MAX_BACKUP_BYTES: usize = 16 * 1024 * 1024;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct PlaceImport {
+    pub added: usize,
+    pub skipped: usize,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedPlace {
@@ -240,6 +248,107 @@ impl SavedPlaces {
         self.commit(next)
     }
 
+    /// Portable backup, also readable as the desktop's saved-places.json.
+    pub fn export_json(&self) -> Result<String, PlacesError> {
+        let text = serde_json::to_string_pretty(&self.data).map_err(io::Error::other)?;
+        if text.len() > MAX_BACKUP_BYTES {
+            return Err(PlacesError::Invalid(
+                "Saved-place backups are limited to 16 MB.".into(),
+            ));
+        }
+        Ok(text)
+    }
+
+    /// Validate and count a merge without changing memory or disk.
+    pub fn preview_import(&self, text: &str) -> Result<PlaceImport, PlacesError> {
+        self.prepare_import(text).map(|(_, result)| result)
+    }
+
+    /// Merge in one atomic write. Incoming ids never replace local ids; exact
+    /// name/note/coordinate duplicates are skipped, including within the file.
+    pub fn import_json(&mut self, text: &str) -> Result<PlaceImport, PlacesError> {
+        let (next, result) = self.prepare_import(text)?;
+        if result.added != 0 {
+            self.commit(next)?;
+        }
+        Ok(result)
+    }
+
+    fn prepare_import(&self, text: &str) -> Result<(PlacesFile, PlaceImport), PlacesError> {
+        use std::collections::HashSet;
+        let invalid = |message: &str| PlacesError::Invalid(message.into());
+        if text.len() > MAX_BACKUP_BYTES {
+            return Err(invalid("Saved-place backups are limited to 16 MB."));
+        }
+        let incoming: PlacesFile = serde_json::from_str(text)
+            .map_err(|_| invalid("This is not a valid Offline Maps saved-place backup."))?;
+        if incoming.schema != PLACES_SCHEMA {
+            return Err(invalid("This saved-place backup version is not supported."));
+        }
+        if incoming.places.len() > MAX_PLACES {
+            return Err(PlacesError::Full);
+        }
+        if incoming.next_id == 0 {
+            return Err(invalid(
+                "The backup contains invalid saved-place identifiers.",
+            ));
+        }
+        let key = |p: &SavedPlace| {
+            // Positive and negative zero represent the same coordinate.
+            let bits = |n: f64| if n == 0.0 { 0 } else { n.to_bits() };
+            (
+                p.name.clone(),
+                p.note.clone(),
+                bits(p.latitude),
+                bits(p.longitude),
+            )
+        };
+        let mut keys: HashSet<_> = self.data.places.iter().map(key).collect();
+        let mut ids = HashSet::new();
+        let mut next = self.data.clone();
+        let mut result = PlaceImport {
+            added: 0,
+            skipped: 0,
+        };
+        for mut place in incoming.places {
+            if place.id == 0 || place.id >= incoming.next_id || !ids.insert(place.id) {
+                return Err(invalid(
+                    "The backup contains invalid saved-place identifiers.",
+                ));
+            }
+            if place.coordinates().is_none() {
+                return Err(invalid(
+                    "The backup contains coordinates outside the valid latitude or longitude range.",
+                ));
+            }
+            place.name = clean_name(&place.name)?;
+            place.note = clean_note(&place.note)?;
+            if [&place.created_at, &place.updated_at]
+                .iter()
+                .any(|s| s.len() > 64 || s.chars().any(char::is_control))
+            {
+                return Err(invalid(
+                    "The backup contains an invalid saved-place timestamp.",
+                ));
+            }
+            if !keys.insert(key(&place)) {
+                result.skipped += 1;
+                continue;
+            }
+            if next.places.len() >= MAX_PLACES {
+                return Err(PlacesError::Full);
+            }
+            place.id = next.next_id;
+            next.next_id = next
+                .next_id
+                .checked_add(1)
+                .ok_or_else(|| invalid("No more saved-place identifiers are available."))?;
+            next.places.push(place);
+            result.added += 1;
+        }
+        Ok((next, result))
+    }
+
     /// Writes `next` to disk, then adopts it; a failed write leaves both the
     /// file and this list as they were.
     fn commit(&mut self, next: PlacesFile) -> Result<(), PlacesError> {
@@ -349,5 +458,165 @@ mod tests {
         let outside = places.add("Indianapolis", "", at(39.77, -86.16)).unwrap();
         assert!(inside.is_covered_by(&illinois));
         assert!(!outside.is_covered_by(&illinois));
+    }
+
+    #[test]
+    fn backup_merge_is_atomic_idempotent_and_preserves_local_places() {
+        let source_dir = TempDir::new();
+        let mut source = SavedPlaces::open(&source_dir.0).unwrap();
+        source
+            .add(
+                "Shelter",
+                "Bring water\nAccessible entrance",
+                at(38.9, -77.0),
+            )
+            .unwrap();
+        source.add("家", "Meeting point", at(40.0, -89.0)).unwrap();
+        let backup = source.export_json().unwrap();
+        let target_dir = TempDir::new();
+        let mut target = SavedPlaces::open(&target_dir.0).unwrap();
+        let local = target.add("Home", "Keep this", at(41.0, -88.0)).unwrap();
+        let before = fs::read(target_dir.0.join(PLACES_FILE)).unwrap();
+        assert_eq!(
+            target.preview_import(&backup).unwrap(),
+            PlaceImport {
+                added: 2,
+                skipped: 0
+            }
+        );
+        assert_eq!(fs::read(target_dir.0.join(PLACES_FILE)).unwrap(), before);
+        assert_eq!(target.list(), std::slice::from_ref(&local));
+        assert_eq!(target.import_json(&backup).unwrap().added, 2);
+        assert_eq!(target.get(local.id), Some(&local));
+        assert_eq!(target.list()[1].id, 2);
+        assert_eq!(target.list()[1].created_at, source.list()[0].created_at);
+        let merged = fs::read(target_dir.0.join(PLACES_FILE)).unwrap();
+        assert_eq!(
+            target.import_json(&backup).unwrap(),
+            PlaceImport {
+                added: 0,
+                skipped: 2
+            }
+        );
+        assert_eq!(fs::read(target_dir.0.join(PLACES_FILE)).unwrap(), merged);
+        assert_eq!(
+            SavedPlaces::open(&target_dir.0).unwrap().list(),
+            target.list()
+        );
+        // Same destination with a changed note is kept as a separate entry.
+        source.update(1, "Shelter", "Different plan").unwrap();
+        assert_eq!(
+            target.import_json(&source.export_json().unwrap()).unwrap(),
+            PlaceImport {
+                added: 1,
+                skipped: 1
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_backup_never_partially_merges() {
+        let dir = TempDir::new();
+        let mut places = SavedPlaces::open(&dir.0).unwrap();
+        places.add("Existing", "", at(40.0, -89.0)).unwrap();
+        let before = fs::read(dir.0.join(PLACES_FILE)).unwrap();
+        let mut good: serde_json::Value =
+            serde_json::from_str(&places.export_json().unwrap()).unwrap();
+        good["places"][0]["name"] = "New destination".into();
+        let mut bad_cases = vec!["not json".to_owned()];
+        for (field, value) in [
+            ("latitude", serde_json::json!(91)),
+            ("longitude", serde_json::json!(-181)),
+            ("name", serde_json::json!("\t")),
+            ("note", serde_json::json!("x".repeat(2001))),
+            ("id", serde_json::json!(0)),
+            ("updated_at", serde_json::json!("bad\ntimestamp")),
+        ] {
+            let mut bad = good.clone();
+            let mut second = bad["places"][0].clone();
+            second["id"] = 2.into();
+            second[field] = value;
+            bad["places"].as_array_mut().unwrap().push(second);
+            bad["next_id"] = 3.into();
+            bad_cases.push(bad.to_string());
+        }
+        let mut unsupported = good.clone();
+        unsupported["schema"] = 99.into();
+        bad_cases.push(unsupported.to_string());
+        let mut duplicate_id = good.clone();
+        duplicate_id["places"]
+            .as_array_mut()
+            .unwrap()
+            .push(good["places"][0].clone());
+        bad_cases.push(duplicate_id.to_string());
+        for bad in bad_cases {
+            assert!(places.preview_import(&bad).is_err());
+            assert!(places.import_json(&bad).is_err());
+            assert_eq!(fs::read(dir.0.join(PLACES_FILE)).unwrap(), before);
+            assert_eq!(places.list().len(), 1);
+        }
+    }
+
+    #[test]
+    fn duplicate_entries_in_backup_and_capacity_are_checked() {
+        let dir = TempDir::new();
+        let mut places = SavedPlaces::open(&dir.0).unwrap();
+        places.add("Point", "", at(0.0, 0.0)).unwrap();
+        let mut backup: serde_json::Value =
+            serde_json::from_str(&places.export_json().unwrap()).unwrap();
+        backup["next_id"] = 3.into();
+        let mut second = backup["places"][0].clone();
+        second["id"] = 2.into();
+        second["latitude"] = serde_json::json!(-0.0);
+        backup["places"].as_array_mut().unwrap().push(second);
+        let other = TempDir::new();
+        let mut target = SavedPlaces::open(&other.0).unwrap();
+        assert_eq!(
+            target.import_json(&backup.to_string()).unwrap(),
+            PlaceImport {
+                added: 1,
+                skipped: 1
+            }
+        );
+        let mut full = places.data.clone();
+        full.places = (1..=MAX_PLACES)
+            .map(|id| {
+                let mut p = places.list()[0].clone();
+                p.id = id as u64;
+                p.name = format!("Point {id}");
+                p
+            })
+            .collect();
+        full.next_id = MAX_PLACES as u64 + 1;
+        places.commit(full).unwrap();
+        let before = fs::read(dir.0.join(PLACES_FILE)).unwrap();
+        assert!(matches!(
+            places.import_json(&target.export_json().unwrap()),
+            Err(PlacesError::Full)
+        ));
+        assert_eq!(fs::read(dir.0.join(PLACES_FILE)).unwrap(), before);
+        assert!(
+            target
+                .import_json(&" ".repeat(MAX_BACKUP_BYTES + 1))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn backup_write_failure_does_not_change_in_memory_places() {
+        let source = TempDir::new();
+        let mut incoming = SavedPlaces::open(&source.0).unwrap();
+        incoming.add("New", "", at(1.0, 2.0)).unwrap();
+        let dir = TempDir::new();
+        let mut target = SavedPlaces::open(&dir.0).unwrap();
+        // A directory at the file path makes atomic replacement fail on both OSes.
+        fs::create_dir(dir.0.join(PLACES_FILE)).unwrap();
+        assert!(
+            target
+                .import_json(&incoming.export_json().unwrap())
+                .is_err()
+        );
+        assert!(target.list().is_empty());
+        assert!(dir.0.join(PLACES_FILE).is_dir());
     }
 }

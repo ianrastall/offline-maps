@@ -29,7 +29,10 @@ object NativeCore {
 
     @JvmStatic external fun close(handle: Long)
     @JvmStatic external fun searchJson(handle: Long, query: String, latitude: Double, longitude: Double): String
-    @JvmStatic external fun addPlace(handle: Long, name: String, latitude: Double, longitude: Double)
+    @JvmStatic external fun addPlace(handle: Long, name: String, note: String, latitude: Double, longitude: Double)
+    @JvmStatic external fun updatePlace(handle: Long, id: Long, name: String, note: String)
+    @JvmStatic external fun exportPlaces(handle: Long): String
+    @JvmStatic external fun importPlaces(handle: Long, backup: String, apply: Boolean): String
     @JvmStatic external fun removePlace(handle: Long, id: Long)
     @JvmStatic external fun importTransfer(handle: Long, staged: String): String
     @JvmStatic external fun cancel(handle: Long)

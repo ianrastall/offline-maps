@@ -17,6 +17,10 @@ import java.util.concurrent.Executors
 class MapModel(application: Application) : AndroidViewModel(application) {
     var status by mutableStateOf<JSONObject?>(null)
     var error by mutableStateOf<String?>(null)
+    var notice by mutableStateOf<String?>(null)
+    var placesPreview by mutableStateOf<JSONObject?>(null)
+        private set
+    private var placesBackup: String? = null
     var busy by mutableStateOf<String?>("Opening maps…")
     var results by mutableStateOf<List<JSONObject>>(emptyList())
     var searching by mutableStateOf(false)
@@ -43,6 +47,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     val downloads = RegionDownloads(application, { core }, { refresh(reload = true) })
     val workText: String? get() = if (downloads.active) downloads.message else busy
     val hasWork: Boolean get() = busy != null || downloads.active
+    val canCancelWork: Boolean get() = downloads.active || importer != null
 
     init {
         runCatching { prefs.getString("view", null)?.let { view = JSONObject(it) } }
@@ -66,7 +71,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
 
     private fun task(clearBusy: Boolean = false, work: () -> Unit) {
         worker.execute {
-            runCatching(work).onFailure { e -> main.post { error = e.message ?: e.toString() } }
+            runCatching(work).onFailure { e -> main.post { error = (e.message ?: e.toString()).removePrefix("Rust error: ") } }
             if (clearBusy) main.post { busy = null }
         }
     }
@@ -114,11 +119,75 @@ class MapModel(application: Application) : AndroidViewModel(application) {
             .put("longitude", place.getDouble("longitude")).put("label", place.optString("name"))
             .put("zoom", when (place.optString("kind")) { "place" -> 11; "address" -> 18; else -> 15 }))
     }
-    fun save(name: String, latitude: Double, longitude: Double) {
-        task { core!!.use { NativeCore.addPlace(it, name, latitude, longitude) }; refresh() }
+    fun save(name: String, note: String, latitude: Double, longitude: Double, id: Long? = null, done: () -> Unit) {
+        if (busy != null) return
+        busy = "Saving place…"; error = null; notice = null
+        task(clearBusy = true) {
+            core!!.use {
+                if (id == null) NativeCore.addPlace(it, name, note, latitude, longitude)
+                else NativeCore.updatePlace(it, id, name, note)
+            }
+            refresh()
+            main.post { notice = "Saved place."; done() }
+        }
     }
     fun remove(place: JSONObject) {
-        task { core!!.use { NativeCore.removePlace(it, place.getLong("id")) }; refresh() }
+        if (busy != null) return
+        busy = "Removing place…"; error = null; notice = null
+        task(clearBusy = true) {
+            core!!.use { NativeCore.removePlace(it, place.getLong("id")) }
+            refresh()
+            main.post { notice = "Removed saved place." }
+        }
+    }
+    fun exportPlaces(uri: Uri) {
+        if (hasWork || core == null) return
+        busy = "Saving backup…"; error = null; notice = null
+        task(clearBusy = true) {
+            val text = core!!.use { NativeCore.exportPlaces(it) }
+            val resolver = getApplication<Application>().contentResolver
+            (resolver.openOutputStream(uri, "wt") ?: error("The backup file could not be opened.")).use { output ->
+                output.write(text.toByteArray(Charsets.UTF_8))
+                output.flush()
+            }
+            main.post { notice = "Saved-place backup saved." }
+        }
+    }
+    fun previewPlaces(uri: Uri) {
+        if (hasWork || core == null) return
+        busy = "Reading saved places…"; error = null; notice = null
+        cancelPlacesImport()
+        task(clearBusy = true) {
+            val resolver = getApplication<Application>().contentResolver
+            val bytes = (resolver.openInputStream(uri) ?: error("The backup file could not be opened.")).use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    check(output.size() + count <= 16 * 1024 * 1024) { "Saved-place backups are limited to 16 MB." }
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            val text = Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+            val preview = core!!.use { JSONObject(NativeCore.importPlaces(it, text, false)) }
+            main.post { placesBackup = text; placesPreview = preview }
+        }
+    }
+    fun cancelPlacesImport() { placesPreview = null; placesBackup = null }
+    fun importPlaces() {
+        val backup = placesBackup ?: return
+        if (busy != null) return
+        busy = "Importing saved places…"; error = null; notice = null
+        task(clearBusy = true) {
+            val result = core!!.use { JSONObject(NativeCore.importPlaces(it, backup, true)) }
+            refresh()
+            main.post {
+                cancelPlacesImport()
+                notice = "Added ${result.getInt("added")} places; skipped ${result.getInt("skipped")} exact duplicates."
+            }
+        }
     }
     fun importMap(tree: Uri) {
         if (hasWork || core == null) return
