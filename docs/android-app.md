@@ -77,6 +77,10 @@ This milestone supports foreground downloads; background transfers, transfer-fol
 
 ## Android 0.2.1: connection status
 
+Published 17 November 2026 as [android-v0.2.1](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.2.1), built from `d15088ca6fa9d23f230595108f3bc1898a441b16`. The signed APK is 127,925,083 bytes; SHA-256 `b48cbb0b1ee5c8123fe21c9e357da307439e107f78ce9b913ee9591157fc142e`. The signing certificate is unchanged, and the installed phone APK has this same checksum. It is an Android prerelease; Windows remains the latest desktop release.
+
 The Samsung's offline acceptance exposed a connection label that could remain at "Wi-Fi connected" after airplane mode removed the active network. Download starts already recheck the selected network; the incorrect label did not permit an offline transfer. The foreground controller now reconciles the connection label every two seconds and immediately on resume, in addition to its network callbacks. It stops that observation when backgrounded or closed.
 
 Verification: debug and signed release builds, lint and the GPS marker regression pass. The signed patch installed over 0.2.0 on the Galaxy S26 FE, with both maps/all layers and the saved-place list retained. The installed APK matches the release SHA-256. With the phone still in airplane mode and no active network, the connection label now correctly says "Connect to Wi-Fi before downloading." On the emulator, keeping the download browser open across Wi-Fi loss changed the label from connected to unavailable; restoring Wi-Fi changed it back without reopening the screen.
+
+The patch also found McPherson Square in the downloaded DC data with Android still reporting no active network. Selecting it rendered labeled roads, route shields, station/outdoor-place symbols, public-land shading and attribution locally. No new saved place was created during this check.
