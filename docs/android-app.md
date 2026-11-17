@@ -19,6 +19,8 @@ Validation of this milestone: five transfer tests passed, including activation, 
 
 ## Android 0.1.0 preview
 
+Published 17 November 2026 as [android-v0.1.0](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.1.0), built from `9a0a6e0b0397332b4d12acb5762463e5f630e0d2`. The signed APK is 127,815,671 bytes; SHA-256 `a93d8ace46d1af51c10acbc2a0e92b1b21c1f027c43c63eef2aca4b833b32cc2`, matching GitHub's asset digest. It is marked as a prerelease and leaves the Windows release as latest.
+
 The first build has foreground satellite GPS, visible/used satellite counts while waiting, fix accuracy and age, follow mode, offline search and saved places. Android uses Kotlin/Jetpack Compose and the shared map page in WebView as Ian chose on 15 November. GPS fixes come from `LocationManager.GPS_PROVIDER`; no network provider or Play Services is required. A fix older than 30 seconds is shown as stale and cannot be saved as the current position. Direction is the GPS direction of travel when available, not a compass heading. Touching the map suspends following; Follow recenters on a fresh fix.
 
 The app asks for precise location only when GPS is enabled, stops requesting fixes in the background and restarts when foregrounded. The manifest has no internet permission. Direct phone downloads are not part of this first build.
