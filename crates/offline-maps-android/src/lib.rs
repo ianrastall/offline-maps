@@ -142,6 +142,7 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_ope
             let config = pb::Config {
                 store_directory: store.try_to_string(env)?,
                 overview_path: overview.try_to_string(env)?,
+                prepared_extras_only: true,
                 ..Default::default()
             };
             let service = Service::open(&config)?;
@@ -337,6 +338,75 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_can
         .with_env(|_env| -> Result<()> {
             unsafe { service(handle) }?.cancel();
             Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// The local catalog: opening the download list makes no network requests.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_catalogJson<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let catalog = unsafe { service(handle) }?.catalog();
+            let regions: Vec<_> = catalog.regions.iter().map(|r| json!({
+            "id": r.id, "name": r.name, "country": r.country, "continent": r.continent,
+            "note": r.note, "mapBytes": r.package_bytes, "extrasBytes": r.prepared_extras_bytes,
+            "terrainBytes": r.terrain_bytes, "overlayBytes": r.overlay_bytes,
+        })).collect();
+            text(env, &json!(regions).to_string())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_progressJson<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let p = unsafe { service(handle) }?.progress();
+            text(
+                env,
+                &json!({
+                    "active": p.active, "phase": p.phase, "done": p.done, "total": p.total,
+                    "cancelling": p.cancelling, "region": p.region_name, "target": p.target,
+                })
+                .to_string(),
+            )
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// A single, resumable update. Run on a worker; progress and cancellation may
+/// be called concurrently. The service activates only verified, prepared data.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_updateJson<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    region: JString<'local>,
+    target: jint,
+    check_only: jni::sys::jboolean,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let result = unsafe { service(handle) }?.update(&pb::Update {
+                region_id: region.try_to_string(env)?,
+                target,
+                check_only: check_only != jni::sys::JNI_FALSE,
+            })?;
+            text(env, &json!({
+            "upToDate": result.up_to_date, "available": result.available,
+            "date": result.remote_date, "bytes": result.remote_bytes, "version": result.version,
+        }).to_string())
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }

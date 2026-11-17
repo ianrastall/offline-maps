@@ -582,6 +582,11 @@ const SCRATCH_SPACE: u64 = 4 << 30;
 /// 2026), against 42 seconds on an internal disk. The finished file is then copied in
 /// one sequential write.
 fn scratch_for(out: &Path) -> Option<std::path::PathBuf> {
+    // Android's global temporary folder is not writable by ordinary apps.
+    // Both the map and its derived index already live on internal app storage.
+    if cfg!(target_os = "android") {
+        return None;
+    }
     let folder = std::env::temp_dir();
     if !fs4::available_space(&folder).is_ok_and(|free| free >= SCRATCH_SPACE) {
         return None;

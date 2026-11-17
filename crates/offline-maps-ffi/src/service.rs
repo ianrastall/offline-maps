@@ -91,6 +91,7 @@ pub struct Service {
     overlays_base: String,
     /// Where prepared stations and addresses are published.
     bundles_base: String,
+    prepared_extras_only: bool,
     /// The list of prepared files and when it was read (`None`: unreadable then).
     manifest: Mutex<Option<(Instant, Option<Arc<Manifest>>)>>,
     /// The built-in whole-country overview, when the program folder has it.
@@ -379,6 +380,7 @@ impl Service {
                 url => url.to_owned(),
             },
             manifest: Mutex::new(None),
+            prepared_extras_only: config.prepared_extras_only,
             overview: Mutex::new(
                 (!config.overview_path.is_empty())
                     .then(|| TilePackage::open(Path::new(&config.overview_path)).ok())
@@ -1169,6 +1171,14 @@ impl Service {
             }
             _ => {
                 let from_extract = || {
+                    if self.prepared_extras_only {
+                        return Err(UpdateError::Invalid(
+                            offline_maps_core::mbtiles::PackageError::Invalid(
+                                "Prepared stations and addresses are unavailable. Try again later."
+                                    .into(),
+                            ),
+                        ));
+                    }
                     update_extras(
                         &self.store,
                         &region,

@@ -22,6 +22,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     var searching by mutableStateOf(false)
     var searchHint by mutableStateOf<String?>(null)
     var query by mutableStateOf("")
+    var catalog by mutableStateOf<List<JSONObject>>(emptyList())
     var gpsWanted by mutableStateOf(false)
     var following by mutableStateOf(false)
     var fix by mutableStateOf<android.location.Location?>(null)
@@ -39,10 +40,13 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("map", 0)
     private var importer: MapImport? = null
     private var searchGeneration = 0
+    val downloads = RegionDownloads(application, { core }, { refresh(reload = true) })
+    val workText: String? get() = if (downloads.active) downloads.message else busy
+    val hasWork: Boolean get() = busy != null || downloads.active
 
     init {
         runCatching { prefs.getString("view", null)?.let { view = JSONObject(it) } }
-        task {
+        task(clearBusy = true) {
             val app = getApplication<Application>()
             val overview = File(app.noBackupFilesDir, "world-overview.mbtiles")
             val size = app.assets.openFd("overview/world-overview.mbtiles").use { it.length }
@@ -54,14 +58,16 @@ class MapModel(application: Application) : AndroidViewModel(application) {
             val maps = File(app.noBackupFilesDir, "maps").apply { mkdirs() }
             File(maps, ".imports").deleteRecursively()
             core = CoreStore(maps.absolutePath, overview.absolutePath)
+            val regions = core!!.use { JSONArray(NativeCore.catalogJson(it)).objects() }
+            main.post { catalog = regions }
             refresh()
         }
     }
 
-    private fun task(work: () -> Unit) {
+    private fun task(clearBusy: Boolean = false, work: () -> Unit) {
         worker.execute {
             runCatching(work).onFailure { e -> main.post { error = e.message ?: e.toString() } }
-            main.post { busy = null }
+            if (clearBusy) main.post { busy = null }
         }
     }
     private fun refresh(reload: Boolean = false) {
@@ -115,10 +121,10 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         task { core!!.use { NativeCore.removePlace(it, place.getLong("id")) }; refresh() }
     }
     fun importMap(tree: Uri) {
-        if (busy != null || core == null) return
+        if (hasWork || core == null) return
         busy = "Reading transfer…"
         val job = MapImport(getApplication(), core!!).also { importer = it }
-        task {
+        task(clearBusy = true) {
             try {
                 job.run(tree) { phase -> main.post { busy = phase } }
                 refresh(reload = true)
@@ -126,6 +132,14 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun cancelImport() { importer?.cancelled?.set(true); core?.use { NativeCore.cancel(it) } }
+    fun cancelWork() { if (downloads.active) downloads.pause() else cancelImport() }
+    fun startDownload(region: JSONObject, target: Int) {
+        if (busy != null) return
+        error = null
+        downloads.start(DownloadRequest(region.getString("id"), target), region.optLong(when (target) {
+            1 -> "mapBytes"; 2 -> "extrasBytes"; 3 -> "terrainBytes"; else -> "overlayBytes"
+        }))
+    }
     fun position(stale: Boolean = false) {
         val current = fix
         val message = JSONObject().put("kind", "position")
@@ -146,8 +160,11 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         importer?.cancelled?.set(true)
         core?.use { NativeCore.cancel(it) }
-        worker.execute { core?.close() }
-        worker.shutdown()
+        downloads.close {
+            worker.shutdown()
+            worker.awaitTermination(Long.MAX_VALUE, java.util.concurrent.TimeUnit.NANOSECONDS)
+            core?.close()
+        }
     }
 }
 

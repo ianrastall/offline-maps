@@ -119,9 +119,10 @@ class MainActivity : ComponentActivity() {
         } else if (precise()) { model.gpsWanted = true; model.following = true; startGps() }
         else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
-    override fun onResume() { super.onResume(); resumed = true; startGps(); handler.post(tick) }
+    override fun onResume() { super.onResume(); resumed = true; model.downloads.foreground(true); startGps(); handler.post(tick) }
     override fun onPause() {
         resumed = false; handler.removeCallbacks(tick); locations.removeUpdates(listener)
+        model.downloads.foreground(false)
         locations.unregisterGnssStatusCallback(satelliteStatus)
         model.position(stale = true)
         super.onPause()
@@ -137,6 +138,7 @@ class MainActivity : ComponentActivity() {
         var saveAt by remember { mutableStateOf<JSONObject?>(null) }
         var saveName by remember { mutableStateOf("") }
         var selected by remember { mutableStateOf<JSONObject?>(null) }
+        var downloadRegion by remember { mutableStateOf<String?>(null) }
         val keyboard = LocalSoftwareKeyboardController.current
         val picker = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) model.importMap(uri)
@@ -144,7 +146,7 @@ class MainActivity : ComponentActivity() {
         val ready = model.status != null
         val current = model.fix?.takeIf { model.gpsWanted && fixAge(it) <= 30_000 && locations.isProviderEnabled(LocationManager.GPS_PROVIDER) }
         SideEffect {
-            if ((model.gpsWanted && model.following) || model.busy != null) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if ((model.gpsWanted && model.following) || model.hasWork) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
         Surface(Modifier.fillMaxSize()) {
@@ -205,17 +207,23 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = { selected = null }) { Text("Close") }
                     }
                 }
-                model.error?.let { message ->
+                (model.error ?: model.downloads.error)?.let { message ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                         Text(message, Modifier.weight(1f).padding(vertical = 8.dp), color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { model.error = null }) { Text("Dismiss") }
+                        TextButton(onClick = { model.error = null; model.downloads.error = null }) { Text("Dismiss") }
                     }
                 }
-                model.busy?.let { phase ->
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                model.workText?.let { phase ->
+                    if (model.downloads.active) DownloadProgress(model.downloads) else LinearProgressIndicator(Modifier.fillMaxWidth())
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
                         Text(phase, Modifier.weight(1f).padding(vertical = 12.dp))
-                        if (ready) TextButton(onClick = { model.cancelImport() }) { Text("Cancel") }
+                        if (ready) TextButton(onClick = { model.cancelWork() }) { Text(if (model.downloads.active) "Pause" else "Cancel") }
+                    }
+                }
+                model.downloads.notice?.let { message ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                        Text(message, Modifier.weight(1f).padding(vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { model.downloads.notice = null }) { Text("Dismiss") }
                     }
                 }
                 Text(model.gpsText, Modifier.fillMaxWidth().clickable {
@@ -236,17 +244,19 @@ class MainActivity : ComponentActivity() {
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val regions = model.status!!.getJSONArray("regions").objects()
-                    if (regions.isEmpty()) Text("No detailed maps installed. Copy a prepared region folder from the desktop, then import it here.")
+                    if (regions.isEmpty()) Text("No detailed maps installed. Download a region while online, or import a prepared folder from the desktop.")
                     regions.forEach { region ->
                         Text("${region.getString("name")} · ${region.optString("date")}\n" +
                             listOfNotNull("Roads and search", "Stations and addresses".takeIf { region.getBoolean("extras") },
-                                "Terrain".takeIf { region.getBoolean("terrain") }, "Flood zones and public lands".takeIf { region.getBoolean("overlays") }).joinToString(" · "))
+                                "Terrain".takeIf { region.getBoolean("terrain") }, "Flood zones and public lands".takeIf { region.getBoolean("overlays") }).joinToString(" · "),
+                            Modifier.fillMaxWidth().clickable { downloadRegion = region.getString("id"); panel = "downloads" }.padding(vertical = 6.dp))
                     }
-                    Text("Imports add regions. A region already installed is kept. Direct downloads are planned.")
+                    TextButton(onClick = { panel = null; picker.launch(null) }, enabled = !model.hasWork) { Text("Import map folder") }
                     Row { Checkbox(model.layers, { model.toggleLayers(it) }); Text("Show optional map layers", Modifier.padding(top = 12.dp)) }
                 }
-            }, confirmButton = { TextButton(onClick = { panel = null; picker.launch(null) }, enabled = model.busy == null) { Text("Import map folder") } },
+            }, confirmButton = { TextButton(onClick = { downloadRegion = null; panel = "downloads" }) { Text("Download maps") } },
             dismissButton = { TextButton(onClick = { panel = null }) { Text("Close") } })
+        if (panel == "downloads") DownloadsDialog(model, downloadRegion) { panel = null }
         if (panel == "saved") AlertDialog(onDismissRequest = { panel = null }, title = { Text("Saved places") },
             text = {
                 LazyColumn {

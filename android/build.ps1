@@ -39,8 +39,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Android build failed.' }
     $folder = Join-Path $repo 'dist'
     New-Item -ItemType Directory -Force $folder | Out-Null
-    $apk = Join-Path $PSScriptRoot "app\build\outputs\apk\$($Configuration.ToLowerInvariant())\app-$($Configuration.ToLowerInvariant()).apk"
-    $target = Join-Path $folder "OfflineMaps-android-0.1.0-$($Configuration.ToLowerInvariant()).apk"
+    $output = Join-Path $PSScriptRoot "app\build\outputs\apk\$($Configuration.ToLowerInvariant())"
+    $metadata = Get-Content -LiteralPath (Join-Path $output 'output-metadata.json') -Raw | ConvertFrom-Json
+    $version = $metadata.elements[0].versionName
+    $apk = Join-Path $output $metadata.elements[0].outputFile
+    $target = Join-Path $folder "OfflineMaps-android-$version-$($Configuration.ToLowerInvariant()).apk"
     Copy-Item -LiteralPath $apk -Destination $target
     Get-FileHash -LiteralPath $target -Algorithm SHA256
 } finally {

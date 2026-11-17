@@ -4,6 +4,35 @@ use std::sync::atomic::AtomicUsize;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
+#[test]
+fn prepared_only_never_falls_back_to_a_raw_extract() {
+    let dir = TempDir::new();
+    let service = service::Service::open(&pb::Config {
+        store_directory: dir.0.display().to_string(),
+        // A raw-source override bypasses the manifest. The prepared-only policy
+        // must refuse it before attempting any HTTP request or creating staging.
+        extras_url: "http://127.0.0.1:1/raw.osm.pbf".into(),
+        prepared_extras_only: true,
+        ..Default::default()
+    })
+    .unwrap();
+    let result = service
+        .update(&pb::Update {
+            target: pb::UpdateTarget::Extras as i32,
+            region_id: "us-il".into(),
+            check_only: false,
+        })
+        .unwrap_err();
+    assert_eq!(result.kind, pb::ErrorKind::InvalidData as i32);
+    assert!(
+        result
+            .message
+            .contains("Prepared stations and addresses are unavailable")
+    );
+    assert!(!dir.0.join("us-il/extras/staging").exists());
+    assert!(!service.status().updating);
+}
+
 struct TempDir(PathBuf);
 impl TempDir {
     fn new() -> Self {

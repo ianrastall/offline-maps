@@ -33,4 +33,7 @@ object NativeCore {
     @JvmStatic external fun removePlace(handle: Long, id: Long)
     @JvmStatic external fun importTransfer(handle: Long, staged: String): String
     @JvmStatic external fun cancel(handle: Long)
+    @JvmStatic external fun catalogJson(handle: Long): String
+    @JvmStatic external fun progressJson(handle: Long): String
+    @JvmStatic external fun updateJson(handle: Long, region: String, target: Int, checkOnly: Boolean): String
 }

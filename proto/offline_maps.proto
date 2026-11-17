@@ -31,6 +31,9 @@ message Config {
   // manifest.json and <region>-extras.sqlite files), for testing; empty uses
   // the GitHub releases.
   string bundles_url = 7;
+  // Phones use published extras only; never download and process a raw extract
+  // as a fallback. False preserves the desktop behavior.
+  bool prepared_extras_only = 8;
 }
 
 message Position {
