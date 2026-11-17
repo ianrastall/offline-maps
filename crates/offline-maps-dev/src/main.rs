@@ -284,6 +284,11 @@ fn main() -> ExitCode {
         Some("prepare-extras") => {
             parse(&args[1..]).and_then(|(out, options)| prepare_extras::run(&out, &options))
         }
+        Some("verify-transfer") if args.len() == 2 => {
+            offline_maps_core::transfer::verify(std::path::Path::new(&args[1]), &AtomicBool::new(false))
+                .map(|id| println!("Verified transfer: {id}"))
+                .map_err(|e| e.to_string())
+        }
         _ => Err("usage: offline-maps-dev inspect|serve <package.mbtiles> | download <store-dir> [options]".into()),
     };
     match result {

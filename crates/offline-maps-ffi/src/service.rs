@@ -1292,6 +1292,15 @@ impl Service {
         outcome
     }
 
+    /// Adds a verified offline transfer without changing existing regions.
+    pub fn import_transfer(&self, staged: &Path) -> Outcome<String> {
+        let _busy = self.begin(pb::UpdateTarget::Map, None)?;
+        let id = offline_maps_core::transfer::install(&self.store, staged, &self.cancel)
+            .map_err(|e| error(ErrorKind::InvalidData, e.to_string()))?;
+        self.reload();
+        Ok(id)
+    }
+
     /// Builds the search index of every installed map that has none
     /// (packages installed before search existed).
     pub fn prepare_search(&self) -> Outcome<()> {
