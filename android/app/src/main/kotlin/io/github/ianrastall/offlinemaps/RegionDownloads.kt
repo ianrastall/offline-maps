@@ -75,6 +75,16 @@ class RegionDownloads(
         }.getOrElse { it.message ?: "No connection" }
     }
 
+    // A network callback can precede activeNetwork being updated, particularly
+    // across airplane-mode changes. Reconcile the visible label while open.
+    private val connectionPoll = object : Runnable {
+        override fun run() {
+            if (!foreground) return
+            refreshConnection()
+            main.postDelayed(this, 2_000)
+        }
+    }
+
     fun configureWifiOnly(value: Boolean) {
         if (active) return
         wifiOnly = value
@@ -84,7 +94,9 @@ class RegionDownloads(
 
     fun foreground(value: Boolean) {
         foreground = value
-        if (!value) pause("Download paused while the app is in the background. Choose Resume to continue.")
+        main.removeCallbacks(connectionPoll)
+        if (value) connectionPoll.run()
+        else pause("Download paused while the app is in the background. Choose Resume to continue.")
     }
 
     private fun network(): Network {
@@ -184,6 +196,8 @@ class RegionDownloads(
 
     fun close(after: () -> Unit) {
         pause()
+        foreground = false
+        main.removeCallbacks(connectionPoll)
         connectivity.unregisterNetworkCallback(networks)
         worker.execute { main.removeCallbacks(poll); after() }
         worker.shutdown()
