@@ -146,7 +146,7 @@ class MainActivity : ComponentActivity() {
         val ready = model.status != null
         val current = model.fix?.takeIf { model.gpsWanted && fixAge(it) <= 30_000 && locations.isProviderEnabled(LocationManager.GPS_PROVIDER) }
         SideEffect {
-            if ((model.gpsWanted && model.following) || model.hasWork) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if ((model.gpsWanted && model.following) || model.busy != null) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
         Surface(Modifier.fillMaxSize()) {

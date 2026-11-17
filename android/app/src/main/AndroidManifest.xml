@@ -3,16 +3,23 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <application
+        android:name=".OfflineMapsApplication"
         android:label="Offline Maps"
         android:icon="@drawable/ic_launcher"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:hardwareAccelerated="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <service android:name=".DownloadService" android:exported="false"
+            android:foregroundServiceType="dataSync" android:stopWithTask="false" />
         <activity android:name=".MainActivity" android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density">

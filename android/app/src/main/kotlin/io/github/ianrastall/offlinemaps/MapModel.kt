@@ -11,7 +11,6 @@ import androidx.lifecycle.AndroidViewModel
 import io.github.ianrastall.offlinemaps.core.NativeCore
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.util.concurrent.Executors
 
 class MapModel(application: Application) : AndroidViewModel(application) {
@@ -44,25 +43,18 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("map", 0)
     private var importer: MapImport? = null
     private var searchGeneration = 0
-    val downloads = RegionDownloads(application, { core }, { refresh(reload = true) })
+    private val session = (application as OfflineMapsApplication).session
+    val downloads = session.downloads
+    private val contentChanged: () -> Unit = { runCatching { task { refresh(reload = true) } }; Unit }
     val workText: String? get() = if (downloads.active) downloads.message else busy
     val hasWork: Boolean get() = busy != null || downloads.active
     val canCancelWork: Boolean get() = downloads.active || importer != null
 
     init {
+        session.listen(contentChanged)
         runCatching { prefs.getString("view", null)?.let { view = JSONObject(it) } }
         task(clearBusy = true) {
-            val app = getApplication<Application>()
-            val overview = File(app.noBackupFilesDir, "world-overview.mbtiles")
-            val size = app.assets.openFd("overview/world-overview.mbtiles").use { it.length }
-            if (overview.length() != size) {
-                val temp = File(overview.parentFile, "overview.part")
-                app.assets.open("overview/world-overview.mbtiles").use { input -> temp.outputStream().use { input.copyTo(it); it.fd.sync() } }
-                check(temp.renameTo(overview)) { "Could not prepare the overview." }
-            }
-            val maps = File(app.noBackupFilesDir, "maps").apply { mkdirs() }
-            File(maps, ".imports").deleteRecursively()
-            core = CoreStore(maps.absolutePath, overview.absolutePath)
+            core = session.open()
             val regions = core!!.use { JSONArray(NativeCore.catalogJson(it)).objects() }
             main.post { catalog = regions }
             refresh()
@@ -207,7 +199,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         error = null
         downloads.start(DownloadRequest(region.getString("id"), target), region.optLong(when (target) {
             1 -> "mapBytes"; 2 -> "extrasBytes"; 3 -> "terrainBytes"; else -> "overlayBytes"
-        }))
+        }), region.getString("name"))
     }
     fun position(stale: Boolean = false) {
         val current = fix
@@ -227,13 +219,14 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         page?.post(JSONObject().put("kind", "outdoor").put("visible", visible))
     }
     override fun onCleared() {
-        importer?.cancelled?.set(true)
-        core?.use { NativeCore.cancel(it) }
-        downloads.close {
-            worker.shutdown()
-            worker.awaitTermination(Long.MAX_VALUE, java.util.concurrent.TimeUnit.NANOSECONDS)
-            core?.close()
+        session.unlisten(contentChanged)
+        importer?.let {
+            it.cancelled.set(true)
+            core?.use { handle -> NativeCore.cancel(handle) }
         }
+        // The application session owns the native handle and download worker.
+        // Closing a screen must not cancel a service-owned download.
+        worker.shutdown()
     }
 }
 

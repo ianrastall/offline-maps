@@ -1,6 +1,7 @@
 package io.github.ianrastall.offlinemaps
 
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -20,7 +21,7 @@ data class DownloadRequest(val region: String, val target: Int) {
     fun json() = JSONObject().put("region", region).put("target", target).toString()
 }
 
-/** One foreground download at a time. The core owns staging, verification and activation. */
+/** One service-owned download at a time. The core owns staging and activation. */
 class RegionDownloads(
     private val context: Context,
     private val getCore: () -> CoreStore?,
@@ -30,10 +31,14 @@ class RegionDownloads(
     private val preferences = context.getSharedPreferences("downloads", 0)
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
-    private data class Job(val request: DownloadRequest, val network: Network, val cancelled: AtomicBoolean = AtomicBoolean(false), var pauseReason: String = "Download paused. Choose Resume to continue.")
+    private data class Job(val request: DownloadRequest, val network: Network, var started: Boolean = false, val cancelled: AtomicBoolean = AtomicBoolean(false), var pauseReason: String = "Download paused. Choose Resume to continue.")
     private var job: Job? = null
     private var foreground = false
     var active by mutableStateOf(false)
+        private set
+    var runId = 0L
+        private set
+    var title = "Offline Maps download"
         private set
     var message by mutableStateOf("")
         private set
@@ -96,7 +101,6 @@ class RegionDownloads(
         foreground = value
         main.removeCallbacks(connectionPoll)
         if (value) connectionPoll.run()
-        else pause("Download paused while the app is in the background. Choose Resume to continue.")
     }
 
     private fun network(): Network {
@@ -137,11 +141,11 @@ class RegionDownloads(
         }
     }
 
-    fun start(request: DownloadRequest, estimatedBytes: Long) {
+    fun start(request: DownloadRequest, estimatedBytes: Long, regionName: String) {
         if (active || getCore() == null) return
         error = null; notice = null
         val selected = runCatching {
-            check(foreground) { "Keep Offline Maps open while downloading." }
+            check(foreground) { "Open Offline Maps to start or resume a download." }
             check(request.target in 1..4) { "Unknown download type." }
             val maps = File(context.noBackupFilesDir, "maps")
             // A resumed transfer already occupies staging space. Let the core
@@ -152,9 +156,23 @@ class RegionDownloads(
             network()
         }.getOrElse { error = it.message; return }
         val current = Job(request, selected)
+        runId = android.os.SystemClock.elapsedRealtimeNanos()
+        title = "$regionName · ${when (request.target) { 1 -> "map and search"; 2 -> "stations and addresses"; 3 -> "terrain"; else -> "flood zones and public lands" }}"
         job = current; active = true; message = "Checking the download…"; fraction = null
         pending = request
         preferences.edit().putString("pending", request.json()).apply()
+        runCatching {
+            context.startForegroundService(Intent(context, DownloadService::class.java).setAction(DownloadService.START).putExtra(DownloadService.RUN, runId))
+        }.onFailure { serviceFailed(it) }
+    }
+
+    /** Called only after the service has posted its foreground notification. */
+    fun begin() {
+        val current = job ?: return
+        if (current.started) return
+        current.started = true
+        val request = current.request
+        val selected = current.network
         main.post(poll)
         worker.execute {
             val previous = connectivity.boundNetworkForProcess
@@ -166,7 +184,7 @@ class RegionDownloads(
                 check(!current.cancelled.get()) { "Download paused." }
                 getCore()!!.use { JSONObject(NativeCore.updateJson(it, request.region, request.target, false)) }
             }
-            connectivity.bindProcessToNetwork(previous)
+            runCatching { connectivity.bindProcessToNetwork(previous) }
             // Cancellation can arrive just as atomic activation completes. Report
             // successful activation as success rather than a fictitious pause.
             val refreshFailure = if (result.isSuccess) runCatching(changed).exceptionOrNull() else null
@@ -186,6 +204,15 @@ class RegionDownloads(
         }
     }
 
+    fun serviceFailed(failure: Throwable) {
+        if (job?.started == true) {
+            pause("Download paused because its background service stopped. Choose Resume to continue.")
+            return
+        }
+        job = null; active = false; fraction = null
+        error = "The download service could not start: ${failure.message ?: failure.javaClass.simpleName}. Open the app and choose Resume."
+    }
+
     fun pause(reason: String = "Download paused. Choose Resume to continue.") {
         val current = job ?: return
         current.pauseReason = reason
@@ -194,14 +221,6 @@ class RegionDownloads(
         getCore()?.use { NativeCore.cancel(it) }
     }
 
-    fun close(after: () -> Unit) {
-        pause()
-        foreground = false
-        main.removeCallbacks(connectionPoll)
-        connectivity.unregisterNetworkCallback(networks)
-        worker.execute { main.removeCallbacks(poll); after() }
-        worker.shutdown()
-    }
 }
 
 fun sizeText(bytes: Long): String = when {

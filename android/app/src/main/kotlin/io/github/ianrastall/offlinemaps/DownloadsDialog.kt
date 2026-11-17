@@ -31,7 +31,8 @@ fun DownloadsDialog(model: MapModel, initialRegion: String?, onDismiss: () -> Un
                     if (selected != null) TextButton(onClick = { selectedId = null }) { Text("Regions") }
                     TextButton(onClick = onDismiss) { Text("Done") }
                 }
-                Text("Downloads run while this app is open. Leaving it pauses the transfer; Resume continues it.", style = MaterialTheme.typography.bodySmall)
+                Text("Downloads continue with the screen off or while using other apps. Pause here or in the notification. If the connection is lost, choose Resume when connected again.", style = MaterialTheme.typography.bodySmall)
+                DownloadNotifications()
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                         Text("Wi-Fi only")
