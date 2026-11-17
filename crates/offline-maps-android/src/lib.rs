@@ -13,7 +13,7 @@ use std::fmt;
 
 use jni::errors::ThrowRuntimeExAndDefault;
 use jni::objects::{JByteArray, JClass, JObject, JString};
-use jni::sys::{jint, jlong};
+use jni::sys::{jdouble, jint, jlong};
 use jni::{Env, EnvUnowned};
 use offline_maps_ffi::messages as pb;
 use offline_maps_ffi::service::Service;
@@ -104,6 +104,16 @@ pub fn status_json(status: &pb::Status, overview: bool) -> Value {
         })
         .collect();
     json!({
+        "places": status.places.iter().map(|p| json!({
+            "id": p.id, "name": p.name, "note": p.note,
+            "latitude": p.latitude, "longitude": p.longitude, "covered": p.covered,
+        })).collect::<Vec<_>>(),
+        "regions": status.regions.iter().filter(|r| r.map.is_some()).map(|r| json!({
+            "id": r.id, "name": r.name, "date": r.map.as_ref().map(|m| &m.data_date),
+            "extras": r.extras.is_some(), "terrain": r.terrain.is_some(), "overlays": r.overlays.is_some(),
+        })).collect::<Vec<_>>(),
+        "placesProblem": status.places_problem,
+        "searchReady": status.search_ready,
         "metadata": {
             "bounds": bounds(coverage),
             "minZoom": if installed { status.min_zoom } else { 0 },
@@ -220,6 +230,112 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_clo
             if handle != 0 {
                 drop(unsafe { Box::from_raw(handle as *mut Service) });
             }
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_searchJson<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    query: JString<'local>,
+    latitude: jdouble,
+    longitude: jdouble,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let results = unsafe { service(handle) }?.search(&pb::Search {
+                query: query.try_to_string(env)?,
+                near: Some(pb::Position {
+                    latitude,
+                    longitude,
+                }),
+                limit: 30,
+            })?;
+            let items: Vec<_> = results
+                .results
+                .iter()
+                .map(|r| {
+                    json!({
+                        "name": r.name, "category": r.category, "kind": r.kind, "near": r.near,
+                        "latitude": r.latitude, "longitude": r.longitude,
+                        "distanceKm": r.has_distance.then_some(r.distance_km), "detail": r.detail,
+                    })
+                })
+                .collect();
+            text(env, &json!(items).to_string())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_addPlace<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    name: JString<'local>,
+    latitude: jdouble,
+    longitude: jdouble,
+) {
+    unowned
+        .with_env(|env| -> Result<()> {
+            unsafe { service(handle) }?.add_place(&pb::AddPlace {
+                name: name.try_to_string(env)?,
+                note: String::new(),
+                position: Some(pb::Position {
+                    latitude,
+                    longitude,
+                }),
+            })?;
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_removePlace<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    id: jlong,
+) {
+    unowned
+        .with_env(|_env| -> Result<()> {
+            unsafe { service(handle) }?.remove_place(id as u64)?;
+            Ok(())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_importTransfer<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    staged: JString<'local>,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let path = staged.try_to_string(env)?;
+            let id = unsafe { service(handle) }?.import_transfer(std::path::Path::new(&path))?;
+            text(env, &id)
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_cancel<'local>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) {
+    unowned
+        .with_env(|_env| -> Result<()> {
+            unsafe { service(handle) }?.cancel();
             Ok(())
         })
         .resolve::<ThrowRuntimeExAndDefault>()

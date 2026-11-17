@@ -121,7 +121,10 @@ pub fn verify(root: &Path, cancelled: &AtomicBool) -> Result<String, PackageErro
         &active.record.verified_at,
         cancelled,
     )?;
-    if record.sha256 != active.record.sha256 {
+    if record.sha256 != active.record.sha256
+        || record.metadata != active.record.metadata
+        || record.check != active.record.check
+    {
         return Err(invalid("The map does not match its desktop record."));
     }
     let mut expected = vec![

@@ -8,9 +8,12 @@
 #
 # Needs: cargo-ndk and the Android targets, `npm ci` in proof/renderer, and
 # `node proof/renderer/fetch-assets.mjs` (as for the Windows build).
+param([string]$AppDirectory = (Join-Path $PSScriptRoot 'app\src\main'))
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$app = Join-Path $PSScriptRoot 'app\src\main'
+$app = [IO.Path]::GetFullPath($AppDirectory)
+$allowedApps = @((Join-Path $root 'proof\android\app\src\main'), (Join-Path $root 'android\app\src\main'))
+if ($app -notin $allowedApps) { throw 'The Android app directory must be one of this repository''s two Android targets.' }
 
 Push-Location $root
 try {
@@ -23,7 +26,7 @@ try {
 }
 
 $assets = Join-Path $app 'assets'
-if (Test-Path $assets) { Remove-Item -Recurse -Force $assets }
+if (Test-Path -LiteralPath $assets) { Remove-Item -LiteralPath $assets -Recurse -Force }
 $web = Join-Path $assets 'web'
 function Copy-To([string]$folder, [string[]]$files) {
     $target = Join-Path $web $folder

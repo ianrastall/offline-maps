@@ -33,6 +33,7 @@ let map = null;
 let theme = 'dark';
 let animate = true;
 let selection = null;
+let positionMarker = null;
 let placeMarkers = [];
 let metadata = null;
 let scale = null;
@@ -756,6 +757,11 @@ async function init(message) {
     else addShield(id);
   });
   map.on('moveend', reportView);
+  map.on('movestart', (event) => { if (event.originalEvent) post({ kind: 'gesture' }); });
+  // Touching or dragging the map suspends GPS following before another fix
+  // can recenter it during the gesture.
+  map.on('touchstart', () => post({ kind: 'gesture' }));
+  map.on('dragstart', () => post({ kind: 'gesture' }));
   map.on('moveend', updateCredit);
   map.on('error', (e) => {
     const message = String(e.error?.message ?? e.error ?? e);
@@ -811,6 +817,29 @@ function move(options) {
 }
 
 const handlers = {
+  // Android sends satellite fixes; Windows never sends this message.
+  position(message) {
+    if (!map) return;
+    if (!Number.isFinite(message.latitude) || !Number.isFinite(message.longitude)) {
+      positionMarker?.remove();
+      positionMarker = null;
+      return;
+    }
+    if (!positionMarker) {
+      const element = document.createElement('div');
+      element.className = 'marker-position';
+      element.setAttribute('role', 'img');
+      positionMarker = new maplibregl.Marker({ element })
+        .setLngLat([message.longitude, message.latitude]).addTo(map);
+    }
+    const element = positionMarker.getElement();
+    element.classList.toggle('stale', !!message.stale);
+    element.classList.toggle('bearing', Number.isFinite(message.bearing));
+    element.style.setProperty('--bearing', `${message.bearing ?? 0}deg`);
+    element.setAttribute('aria-label', message.stale ? 'Last GPS position, no current fix' : `GPS position, accuracy ${Math.round(message.accuracy)} metres`);
+    positionMarker.setLngLat([message.longitude, message.latitude]);
+    if (message.follow && !message.stale) move({ center: [message.longitude, message.latitude], zoom: Math.max(map.getZoom(), 14) });
+  },
   init,
   async theme(message) {
     applyColors(message.colors);
@@ -896,7 +925,7 @@ host?.addEventListener('message', (event) => {
   const message = event.data;
   const handler = handlers[message?.kind];
   if (handler) {
-    Promise.resolve(handler(message)).catch((e) => post({ kind: 'error', message: String(e) }));
+    Promise.resolve().then(() => handler(message)).catch((e) => post({ kind: 'error', message: String(e) }));
   }
 });
 

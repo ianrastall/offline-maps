@@ -125,6 +125,8 @@ The search index is built on the user's computer from the map, so it is not down
 
 ### 7. Desktop to phone
 
+**First Android application preview, 17 November 2026:** `android/` now has the Kotlin/Compose shell, shared WebView map, foreground satellite GPS, offline search, saved places and a verified folder import. The signed preview installed and imported Illinois on Ian's Galaxy S26 FE in airplane mode; simulated GPS and saved-place persistence passed on the emulator. Real-phone GPS acceptance and the latest in-place phone update are pending restoration of USB debugging. See [the app and exact verification limits](android-app.md). `tools/export-phone.py` exports one installed desktop region with all active files and checksums; this initial import adds regions without replacing existing ones. Direct downloads, transfer updates and saved-place exchange remain open.
+
 - The desktop exports chosen regions (map, search index, extras, terrain, overlays) as a bundle the phone can import: over USB to the phone's storage, or on an SD card. No internet is involved. The app reads the bundle through Android's file picker and copies it into its own storage: files placed in its `Android/data` folder from outside belong to another user and the app cannot read them (found in the renderer proof).
 - The phone verifies each file with the same SHA-256 and structural checks before activating it, and keeps the previous working copy until then, as the desktop does.
 - Saved places travel both ways.

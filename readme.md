@@ -31,7 +31,9 @@ The built-in overview is made from [Natural Earth](https://www.naturalearthdata.
 
 Status (16 November 2026): version 0.18.1, with a built-in world overview and 540 regions: the US (Alaska included), Canada and Mexico by state, and 440 regions in 190 other countries and territories. All 52 US regions' flood zones and public lands are published. A WinUI 3/C# app over a Rust core. On 11 November 2026 the installed app passed the offline acceptance test: with no network, it showed the Illinois map and found places, addresses, stations, outdoor places and saved places ([validation](docs/validation.md#offline-acceptance-test)).
 
-Planned: Geofabrik's region maps republished in this repository's releases (processed stations and addresses are published since 0.18.0), and an Android app with GPS that receives maps from the desktop (10 November 2026; the [renderer proof](docs/android-renderer-proof.md) ran on Ian's phone on 15 November). See the [North America and Android plan](docs/north-america-and-android.md). Proposed on 14 November 2026: regions for the whole world, filled in on demand over a world overview ([worldwide plan](docs/worldwide.md)).
+Android 0.1.0 preview (17 November 2026): a separate phone app imports prepared desktop regions over USB and adds foreground satellite GPS, offline search and saved places. Illinois map rendering and search ran on a Galaxy S26 FE in airplane mode; GPS behavior is tested with simulated fixes on the emulator, with real-phone satellite acceptance still pending. See [Android setup and verification](docs/android-app.md). The Windows installer remains the normal desktop release.
+
+Planned: Geofabrik's region maps republished in this repository's releases (processed stations and addresses are published since 0.18.0), phone downloads and further desktop-to-phone transfer support. See the [North America and Android plan](docs/north-america-and-android.md) and [worldwide plan](docs/worldwide.md).
 
 - [Project brief](docs/project-brief.md)
 - [North America and Android plan](docs/north-america-and-android.md)

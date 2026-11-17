@@ -3,7 +3,7 @@
 import { writeFileSync } from 'node:fs';
 
 const [, , cmd, out] = process.argv;
-const targets = await (await fetch('http://127.0.0.1:9222/json')).json();
+const targets = await (await fetch(`http://127.0.0.1:${process.env.OFFLINE_MAPS_CDP_PORT || 9222}/json`)).json();
 const page = targets.find(t => t.type === 'page' && t.url.startsWith('https://map.local/'));
 if (!page) { console.error('no map.local page; targets: ' + targets.map(t => t.url).join(', ')); process.exit(2); }
 
@@ -32,7 +32,9 @@ if (cmd === 'info') {
     const attrib = document.querySelector('.maplibregl-ctrl-attrib-inner');
     const labels = [...document.querySelectorAll('.maplibregl-marker, .maplibregl-popup')].length;
     return { href: location.href, online: navigator.onLine, resources: res.length, byKind: kinds, remote,
-      canvas: canvas ? [canvas.width, canvas.height] : null, attribution: attrib ? attrib.innerText : null, markers: labels };
+      canvas: canvas ? [canvas.width, canvas.height] : null, viewport: [innerWidth, innerHeight],
+      layout: ['html', 'body', '#map', 'canvas'].map(s => { const e = document.querySelector(s); const b = e?.getBoundingClientRect(); return { selector: s, width: b?.width, height: b?.height, cssHeight: e && getComputedStyle(e).height }; }),
+      attribution: attrib ? attrib.innerText : null, markers: labels };
   })()`;
   const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true });
   writeFileSync(out, JSON.stringify(r.result?.result?.value ?? r, null, 2));
