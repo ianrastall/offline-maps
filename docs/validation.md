@@ -341,6 +341,19 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.19.0: Map images and renderer recovery
+
+- **Save map image.** File > Save map image… and Ctrl+Shift+S wait for the visible map to finish drawing, capture it, then open the Windows PNG picker. The image includes the map's visible layers, markers, scale and attributions. The app writes the complete PNG beside the destination before renaming it into place.
+- **Startup.** The installed 0.18.1 dropped the first saved-place marker update when it arrived during the asynchronous map initialization. The map now applies host messages in order. The installed 0.19.0 candidate drew the existing test marker on startup.
+- **Process failures.** An injected WebView2 browser-process exit in 0.18.1 left the map at “Reopening it…”. The desktop now recreates the map control after a browser exit, reloads the page after a renderer failure, and preserves the last reported view. WebView2 handles GPU and utility process recovery.
+- **Automated checks.** Rust formatting, Clippy with warnings denied, 120 Rust workspace tests and 11 Windows interop tests passed. The release was built with the normal packaging script and its Jupiter UI checks.
+
+The installed release restored the same viewport, saved marker, scale, and attribution after separate main renderer and browser process failures. When the browser failed before a preceding renderer recovery had finished drawing, the app showed a restart message. A separate browser failure after the map was stable restored the full viewport and produced a valid 920 × 905 PNG in the light theme. The dark-theme candidate also produced a 1,575 × 908 PNG of the selected Millennium Park search result after the search pane was hidden. Its credits and scale fit in both viewport sizes at 240% scaling. Search and the map used local data with ordinary DNS resolution disabled for the test WebView, and the WebView recorded zero remote map requests. This check used the existing Internet connection for the rest of the machine.
+
+The built-in overview exported a 920 × 588 PNG from an empty store, with the scale and attribution visible. Canceling Save As created no file. Saving over a locked test PNG reported an error, kept the original byte-identical, and cleaned up the temporary file. The upgrade preserved the settings, saved places and active map records (46 matching file hashes) and the inventory of 33 installed map and layer files. The installed app launched with the normal profile from its Offline Maps Start Menu entry. Clean-machine, mixed-DPI and screen-reader acceptance remain open.
+
+Published 17 November 2026 as [v0.19.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.19.0), built from `1919553`. Verified the tag target and both uploaded asset digests. The 323,533,723-byte installer has SHA-256 `313b4f55f7eb66005bd28c93fc92ba999f969e91cc2a80b419743941cbf9dd84`.
+
 ## 0.18.1: Stations and addresses for the last four regions
 
 Completed 16 November 2026, at Ian's request, for the four regions the world build of prepared files had shown could not get stations and addresses at all (see 0.18.0).
