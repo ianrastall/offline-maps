@@ -31,6 +31,22 @@ public sealed partial class MainWindow
     private double _viewLatitude;
     private double _viewLongitude;
     private double _viewZoom;
+    private bool CanUseMap => !_closing && _pageReady && _shownMap is not null && MapView.Visibility == Visibility.Visible;
+
+    private void UpdateMapCommands()
+    {
+        FocusMapItem.IsEnabled = CanUseMap;
+        SaveMapImageItem.IsEnabled = CanSaveMapImage;
+    }
+
+    private void FocusMap_Click(object sender, RoutedEventArgs e)
+    {
+        if (CanUseMap)
+        {
+            MapView.Focus(FocusState.Keyboard);
+            Post(new JsonObject { ["kind"] = "focusMap" });
+        }
+    }
 
     private async Task StartMapViewAsync()
     {
@@ -95,7 +111,7 @@ public sealed partial class MainWindow
         _pageReady = false;
         _shownMap = null;
         _mapCapture?.Cancel();
-        UpdateMapImageCommand();
+        UpdateMapCommands();
     }
 
     private void MapView_CoreProcessFailed(WebView2 sender, CoreWebView2ProcessFailedEventArgs e)
@@ -461,7 +477,7 @@ public sealed partial class MainWindow
         _shownMap = status.ContentVersion;
         MapView.Visibility = Visibility.Visible;
         MapMessage.Visibility = Visibility.Collapsed;
-        UpdateMapImageCommand();
+        UpdateMapCommands();
         PostPlaces();
         UpdatePlaceCommands();
     }

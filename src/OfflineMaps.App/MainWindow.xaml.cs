@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 using OfflineMaps.Interop;
 using OfflineMaps.Interop.Messages;
@@ -216,7 +217,7 @@ public sealed partial class MainWindow : Window
                 : "No map is installed yet.";
             MapMessage.Visibility = Visibility.Visible;
             MapView.Visibility = Visibility.Collapsed;
-            UpdateMapImageCommand();
+            UpdateMapCommands();
         }
         if (!busy)
         {
@@ -301,6 +302,20 @@ public sealed partial class MainWindow : Window
         IsTextSelectionEnabled = true,
         Style = (Style)Application.Current.Resources[style],
     };
+
+    private void AnnounceStatus(string message)
+    {
+        StatusText.Text = message;
+        AnnounceLiveRegion(StatusText);
+    }
+
+    private static void AnnounceLiveRegion(TextBlock element)
+    {
+        if (AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
+        {
+            FrameworkElementAutomationPeer.CreatePeerForElement(element)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        }
+    }
 
     private void SetPaneVisible(bool visible)
     {
@@ -545,7 +560,7 @@ public sealed partial class MainWindow : Window
                 if (answer != ContentDialogResult.Primary)
                 {
                     _closing = false;
-                    UpdateMapImageCommand();
+                    UpdateMapCommands();
                     return;
                 }
                 _checkingUpdates?.Cancel();

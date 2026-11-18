@@ -739,7 +739,7 @@ async function init(message) {
   attributionControl = null;
   updateCredit();
   setUnits(message.units);
-  map.getCanvas().setAttribute('aria-label', 'Map. Arrow keys move, plus and minus zoom.');
+  map.getCanvas().setAttribute('aria-label', 'Map. Arrow keys pan. Plus and minus zoom.');
   map.on('style.load', () => {
     styleReady = true;
     Object.keys(SHIELDS).forEach(addShield);
@@ -843,6 +843,9 @@ function prepareSnapshot({ id }) {
 }
 
 const handlers = {
+  focusMap() {
+    map?.getCanvas().focus({ preventScroll: true });
+  },
   // Android sends satellite fixes; Windows never sends this message.
   position(message) {
     if (!map) return;
@@ -964,6 +967,11 @@ window.addEventListener('contextmenu', (e) => e.preventDefault());
 // Shortcuts the shell owns; the web view does not pass them to the window's menus.
 const SHORTCUTS = new Set(['Ctrl+F', 'Ctrl+,', 'Ctrl+B', 'Ctrl+D', 'Ctrl+Shift+C', 'Ctrl+Shift+S', 'Ctrl+0', 'F11']);
 window.addEventListener('keydown', (e) => {
+  if (e.key === 'F6' && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+    e.preventDefault();
+    handlers.focusMap();
+    return;
+  }
   const key = `${e.ctrlKey ? 'Ctrl+' : ''}${e.shiftKey && e.ctrlKey ? 'Shift+' : ''}${e.key.length === 1 ? e.key.toUpperCase() : e.key}`;
   if (SHORTCUTS.has(key)) {
     e.preventDefault();

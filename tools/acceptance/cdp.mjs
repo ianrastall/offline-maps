@@ -1,11 +1,21 @@
 // Minimal Chrome DevTools Protocol client for the app's WebView2 (loopback only).
 // node cdp.mjs info <out.json> | shot <out.png>
 import { writeFileSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const [, , cmd, out] = process.argv;
-const targets = await (await fetch(`http://127.0.0.1:${process.env.OFFLINE_MAPS_CDP_PORT || 9222}/json`)).json();
-const page = targets.find(t => t.type === 'page' && t.url.startsWith('https://map.local/'));
-if (!page) { console.error('no map.local page; targets: ' + targets.map(t => t.url).join(', ')); process.exit(2); }
+const endpoint = `http://127.0.0.1:${process.env.OFFLINE_MAPS_CDP_PORT || 9222}/json`;
+let page;
+for (let attempt = 0; attempt < 30 && !page; attempt++) {
+  try {
+    const targets = await (await fetch(endpoint, { signal: AbortSignal.timeout(1000) })).json();
+    page = targets.find(t => t.type === 'page' && t.url === 'https://map.local/index.html');
+  } catch {
+    // The listener may be starting while the app opens its map store.
+  }
+  if (!page) await delay(250);
+}
+if (!page) throw Error('The local map page did not become available.');
 
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
@@ -13,9 +23,22 @@ let id = 0;
 const pending = new Map();
 ws.onmessage = ev => {
   const m = JSON.parse(ev.data);
-  if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); }
+  if (m.id && pending.has(m.id)) {
+    const finish = pending.get(m.id);
+    pending.delete(m.id);
+    finish(m);
+  }
 };
-const send = (method, params = {}) => new Promise(res => { const i = ++id; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params })); });
+const send = (method, params = {}) => new Promise((resolve, reject) => {
+  const request = ++id;
+  const timer = setTimeout(() => reject(Error(`${method} timed out`)), 10_000);
+  pending.set(request, message => {
+    clearTimeout(timer);
+    if (message.error) reject(Error(message.error.message));
+    else resolve(message);
+  });
+  ws.send(JSON.stringify({ id: request, method, params }));
+});
 
 if (cmd === 'info') {
   const expr = `(() => {
@@ -34,7 +57,9 @@ if (cmd === 'info') {
     return { href: location.href, online: navigator.onLine, resources: res.length, byKind: kinds, remote,
       canvas: canvas ? [canvas.width, canvas.height] : null, viewport: [innerWidth, innerHeight],
       layout: ['html', 'body', '#map', 'canvas'].map(s => { const e = document.querySelector(s); const b = e?.getBoundingClientRect(); return { selector: s, width: b?.width, height: b?.height, cssHeight: e && getComputedStyle(e).height }; }),
-      attribution: attrib ? attrib.innerText : null, markers: labels };
+      attribution: attrib ? attrib.innerText : null, markers: labels,
+      focusedMap: canvas != null && document.hasFocus() && document.activeElement === canvas,
+      mapFocusOutline: canvas?.matches(':focus-visible') ? getComputedStyle(canvas).outlineStyle : null };
   })()`;
   const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true });
   writeFileSync(out, JSON.stringify(r.result?.result?.value ?? r, null, 2));

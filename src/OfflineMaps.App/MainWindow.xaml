@@ -44,6 +44,11 @@
                 </MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem Title="View">
+                <MenuFlyoutItem x:Name="FocusMapItem" Click="FocusMap_Click" IsEnabled="False" Text="Focus map">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F6" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
                 <ToggleMenuFlyoutItem x:Name="PaneToggle" Click="Pane_Click" IsChecked="True" Text="Search pane">
                     <ToggleMenuFlyoutItem.KeyboardAccelerators>
                         <KeyboardAccelerator Key="B" Modifiers="Control" />
@@ -194,6 +199,7 @@
                     x:Name="ListHeading"
                     Grid.Row="2"
                     Margin="0,8,0,0"
+                    AutomationProperties.LiveSetting="Polite"
                     Style="{StaticResource JupiterCaptionStrongTextStyle}"
                     Text="Saved places" />
                 <ListView

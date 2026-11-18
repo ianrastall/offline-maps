@@ -40,7 +40,7 @@ public sealed partial class MainWindow
             });
             if (!_closing)
             {
-                StatusText.Text = $"Saved {Path.GetFileName(file.Path)}";
+                AnnounceStatus($"Saved {Path.GetFileName(file.Path)}");
             }
         });
 
@@ -95,7 +95,7 @@ public sealed partial class MainWindow
             {
                 await RefreshStatusAsync();
                 ShowPlaces();
-                StatusText.Text = $"Added {PlaceCount(result.Added)}. Skipped {DuplicateCount(result.Skipped)}.";
+                AnnounceStatus($"Added {PlaceCount(result.Added)}. Skipped {DuplicateCount(result.Skipped)}.");
             }
         });
 

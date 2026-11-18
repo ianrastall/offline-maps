@@ -18,9 +18,9 @@ public sealed partial class MainWindow
             return;
         }
         _searchTimer.Stop();
+        _searchGeneration++;
         if (sender.Text.Trim().Length == 0)
         {
-            _searchGeneration++;
             ShowPlaces();
             return;
         }
@@ -48,7 +48,7 @@ public sealed partial class MainWindow
         try
         {
             var results = await Task.Run(() => core.Search(query, known ? latitude : null, known ? longitude : null, 50));
-            if (generation != _searchGeneration)
+            if (_closing || generation != _searchGeneration)
             {
                 return;
             }
@@ -58,18 +58,26 @@ public sealed partial class MainWindow
             ListEmpty.Text = items.Count == 0
                 ? "Nothing found. Search finds towns, streets, landmarks, transit and water; with stations and addresses installed, also fuel and charging stations, shelters, drinking water, campgrounds, toilets and house numbers (\"905 e main st carbondale\"). Parks and forests are found by their roads and features, not their area names."
                 : "";
-            if (showFirst && items.Count > 0)
+            if (showFirst)
             {
-                Results.SelectedIndex = 0;
+                AnnounceLiveRegion(ListHeading);
+                if (items.Count > 0)
+                {
+                    Results.SelectedIndex = 0;
+                }
             }
         }
         catch (MapCoreException ex)
         {
-            if (generation == _searchGeneration)
+            if (!_closing && generation == _searchGeneration)
             {
                 Results.ItemsSource = null;
-                ListHeading.Text = "Results";
+                ListHeading.Text = "Search unavailable";
                 ListEmpty.Text = ex.Message;
+                if (showFirst)
+                {
+                    AnnounceLiveRegion(ListHeading);
+                }
             }
         }
     }

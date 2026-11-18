@@ -13,10 +13,7 @@ public sealed partial class MainWindow
     private TaskCompletionSource<bool>? _snapshotReady;
     private CancellationTokenSource? _mapCapture;
 
-    private bool CanSaveMapImage => !_closing && !_savingMapImage && _pageReady &&
-        _shownMap is not null && MapView.Visibility == Visibility.Visible;
-
-    private void UpdateMapImageCommand() => SaveMapImageItem.IsEnabled = CanSaveMapImage;
+    private bool CanSaveMapImage => CanUseMap && !_savingMapImage;
 
     private async void SaveMapImage_Click(object sender, RoutedEventArgs e) => await SaveMapImageAsync();
 
@@ -28,7 +25,7 @@ public sealed partial class MainWindow
         }
 
         _savingMapImage = true;
-        UpdateMapImageCommand();
+        UpdateMapCommands();
         try
         {
             // Capture before showing the picker. Moving or resizing the window while
@@ -50,7 +47,7 @@ public sealed partial class MainWindow
                 await Task.Run(() => WriteExportFile(file.Path, png, overwrite: true));
                 if (!_closing)
                 {
-                    StatusText.Text = $"Saved {Path.GetFileName(file.Path)}";
+                    AnnounceStatus($"Saved {Path.GetFileName(file.Path)}");
                 }
             }
         }
@@ -70,7 +67,7 @@ public sealed partial class MainWindow
             _savingMapImage = false;
             if (!_closing)
             {
-                UpdateMapImageCommand();
+                UpdateMapCommands();
             }
         }
     }
