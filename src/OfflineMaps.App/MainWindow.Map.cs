@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.Web.WebView2.Core;
@@ -118,8 +119,7 @@ public sealed partial class MainWindow
 
         _recoveringMap = true;
         MapMessage.Text = "The map view stopped unexpectedly. Reopening it…";
-        // Return from the event before using the control. WinUI clears its dead browser
-        // controller and can recreate it with the existing profile via EnsureCoreWebView2Async.
+        // Wait for the failure event to return before closing or reloading the control.
         DispatcherQueue.TryEnqueue(async () =>
         {
             if (_closing)
@@ -130,6 +130,15 @@ public sealed partial class MainWindow
             {
                 if (kind == CoreWebView2ProcessFailedKind.BrowserProcessExited || sender.CoreWebView2 is null)
                 {
+                    // Reusing the old WinUI control can leave the new controller at its
+                    // initial bounds, clipping the map, scale and attribution.
+                    sender.CoreProcessFailed -= MapView_CoreProcessFailed;
+                    sender.Close();
+                    MapView = new WebView2 { Visibility = Visibility.Collapsed };
+                    AutomationProperties.SetName(MapView, "Map");
+                    AutomationProperties.SetAutomationId(MapView, "MapView");
+                    MapView.CoreProcessFailed += MapView_CoreProcessFailed;
+                    MapSurface.Child = MapView;
                     await StartMapViewAsync();
                 }
                 else

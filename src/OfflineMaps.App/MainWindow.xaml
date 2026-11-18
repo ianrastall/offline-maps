@@ -139,7 +139,9 @@
             </Grid.ColumnDefinitions>
 
             <!--  jupiter-exception: the map is a WebView2 content surface (docs/jupiter-exceptions.md)  -->
-            <WebView2 x:Name="MapView" AutomationProperties.Name="Map" CoreProcessFailed="MapView_CoreProcessFailed" Visibility="Collapsed" />
+            <Border x:Name="MapSurface">
+                <WebView2 x:Name="MapView" AutomationProperties.Name="Map" CoreProcessFailed="MapView_CoreProcessFailed" Visibility="Collapsed" />
+            </Border>
             <TextBlock
                 x:Name="MapMessage"
                 MaxWidth="{StaticResource JupiterContentMaxWidth}"
