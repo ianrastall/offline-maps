@@ -3,8 +3,8 @@
 // https://map.local/, tiles and stations from the Rust core through the shell.
 //
 // Shell -> page messages (JSON): init, theme, units, terrain, show,
-// clearSelection, places, zoom, fit, center, reload. Page -> shell: ready,
-// view, contextmenu, place, region, key, idle, error.
+// clearSelection, places, zoom, fit, center, reload, snapshot. Page -> shell:
+// ready, view, contextmenu, place, region, key, idle, snapshotReady, error.
 //
 // Overview: the built-in world map from the core at overview/{z}/{x}/{y}.pbf
 // (Natural Earth, zoom 0-7), drawn under everything else. Zoomed out (below
@@ -816,6 +816,32 @@ function move(options) {
   map.easeTo({ ...options, duration: animate ? 167 : 0 });
 }
 
+function prepareSnapshot({ id }) {
+  if (!map) {
+    post({ kind: 'snapshotReady', id, ready: false });
+    return;
+  }
+  let frame = 0;
+  const complete = (ready) => {
+    map.off('idle', onIdle);
+    clearTimeout(timeout);
+    cancelAnimationFrame(frame);
+    post({ kind: 'snapshotReady', id, ready });
+  };
+  const onIdle = () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      if (styleReady && map.loaded() && !map.isMoving()) {
+        complete(true);
+      }
+    });
+  };
+  const timeout = setTimeout(() => complete(false), 8000);
+  map.on('idle', onIdle);
+  map.resize();
+  map.triggerRepaint();
+}
+
 const handlers = {
   // Android sends satellite fixes; Windows never sends this message.
   position(message) {
@@ -847,7 +873,7 @@ const handlers = {
     if (message.theme !== theme && map) {
       theme = message.theme;
       styleReady = false;
-    map.setStyle(await loadStyle(theme), { diff: false });
+      map.setStyle(await loadStyle(theme), { diff: false });
     }
   },
   show(message) {
@@ -919,20 +945,24 @@ const handlers = {
     styleReady = false;
     map.setStyle(await loadStyle(theme), { diff: false });
   },
+  snapshot: prepareSnapshot,
 };
 
+// Preserve host order across asynchronous style loads. In particular, initial
+// saved places must be applied after init creates the map.
+let hostCommands = Promise.resolve();
 host?.addEventListener('message', (event) => {
   const message = event.data;
   const handler = handlers[message?.kind];
   if (handler) {
-    Promise.resolve().then(() => handler(message)).catch((e) => post({ kind: 'error', message: String(e) }));
+    hostCommands = hostCommands.then(() => handler(message)).catch((e) => post({ kind: 'error', message: String(e) }));
   }
 });
 
 window.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Shortcuts the shell owns; the web view does not pass them to the window's menus.
-const SHORTCUTS = new Set(['Ctrl+F', 'Ctrl+,', 'Ctrl+B', 'Ctrl+D', 'Ctrl+Shift+C', 'Ctrl+0', 'F11']);
+const SHORTCUTS = new Set(['Ctrl+F', 'Ctrl+,', 'Ctrl+B', 'Ctrl+D', 'Ctrl+Shift+C', 'Ctrl+Shift+S', 'Ctrl+0', 'F11']);
 window.addEventListener('keydown', (e) => {
   const key = `${e.ctrlKey ? 'Ctrl+' : ''}${e.shiftKey && e.ctrlKey ? 'Shift+' : ''}${e.key.length === 1 ? e.key.toUpperCase() : e.key}`;
   if (SHORTCUTS.has(key)) {

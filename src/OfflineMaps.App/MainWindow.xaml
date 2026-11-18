@@ -20,6 +20,12 @@
 
         <MenuBar x:Name="Menu">
             <MenuBarItem Title="File">
+                <MenuFlyoutItem x:Name="SaveMapImageItem" Click="SaveMapImage_Click" IsEnabled="False" Text="Save map image…">
+                    <MenuFlyoutItem.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="S" Modifiers="Control,Shift" />
+                    </MenuFlyoutItem.KeyboardAccelerators>
+                </MenuFlyoutItem>
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Click="Settings_Click" KeyboardAcceleratorTextOverride="Ctrl+," Text="Settings" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Click="Exit_Click" KeyboardAcceleratorTextOverride="Alt+F4" Text="Exit" />
@@ -133,7 +139,7 @@
             </Grid.ColumnDefinitions>
 
             <!--  jupiter-exception: the map is a WebView2 content surface (docs/jupiter-exceptions.md)  -->
-            <WebView2 x:Name="MapView" AutomationProperties.Name="Map" Visibility="Collapsed" />
+            <WebView2 x:Name="MapView" AutomationProperties.Name="Map" CoreProcessFailed="MapView_CoreProcessFailed" Visibility="Collapsed" />
             <TextBlock
                 x:Name="MapMessage"
                 MaxWidth="{StaticResource JupiterContentMaxWidth}"

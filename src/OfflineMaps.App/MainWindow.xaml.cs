@@ -231,6 +231,7 @@ public sealed partial class MainWindow : Window
                 : "No map is installed yet.";
             MapMessage.Visibility = Visibility.Visible;
             MapView.Visibility = Visibility.Collapsed;
+            UpdateMapImageCommand();
         }
         if (!busy)
         {
@@ -556,6 +557,7 @@ public sealed partial class MainWindow : Window
                 if (answer != ContentDialogResult.Primary)
                 {
                     _closing = false;
+                    UpdateMapImageCommand();
                     return;
                 }
                 _core?.Cancel();
@@ -570,6 +572,7 @@ public sealed partial class MainWindow : Window
             RememberPlacement();
             RememberView();
             _settings.Save();
+            _mapCapture?.Cancel();
             MapView.Close();
             _core?.Dispose();
             _core = null;

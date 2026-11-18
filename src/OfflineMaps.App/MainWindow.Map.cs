@@ -23,6 +23,8 @@ public sealed partial class MainWindow
     private static readonly UISettings UiSettings = new();
     private CoreWebView2Environment? _environment;
     private bool _pageReady;
+    private bool _hasView;
+    private bool _recoveringMap;
     /// <summary>The content version of the installed maps and extras the page shows.</summary>
     private string? _shownMap;
     private double _viewLatitude;
@@ -33,8 +35,16 @@ public sealed partial class MainWindow
     {
         try
         {
-            _environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, AppPaths.WebViewDataDir, new CoreWebView2EnvironmentOptions());
+            _environment ??= await CoreWebView2Environment.CreateWithOptionsAsync(null, AppPaths.WebViewDataDir, new CoreWebView2EnvironmentOptions());
+            if (_allowClose)
+            {
+                return;
+            }
             await MapView.EnsureCoreWebView2Async(_environment);
+            if (_allowClose)
+            {
+                return;
+            }
         }
         catch (Exception ex)
         {
@@ -60,21 +70,13 @@ public sealed partial class MainWindow
             if (!IsLocal(e.Uri))
             {
                 e.Cancel = true;
+                return;
             }
+            ResetMapPage();
         };
         web.NewWindowRequested += (_, e) => e.Handled = true;
         web.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
         web.WebMessageReceived += OnWebMessage;
-        web.ProcessFailed += (_, e) =>
-        {
-            AppLog.Write($"The map view stopped: {e.ProcessFailedKind}");
-            _pageReady = false;
-            _shownMap = null;
-            MapView.Visibility = Visibility.Collapsed;
-            MapMessage.Text = "The map view stopped unexpectedly. Reopening it…";
-            MapMessage.Visibility = Visibility.Visible;
-            web.Reload();
-        };
         web.NavigationCompleted += (_, e) =>
         {
             if (!e.IsSuccess)
@@ -83,6 +85,64 @@ public sealed partial class MainWindow
             }
         };
         web.Navigate($"https://{Host}/index.html");
+    }
+
+    private void ResetMapPage()
+    {
+        RememberView();
+        _hasView = false;
+        _pageReady = false;
+        _shownMap = null;
+        _mapCapture?.Cancel();
+        UpdateMapImageCommand();
+    }
+
+    private void MapView_CoreProcessFailed(WebView2 sender, CoreWebView2ProcessFailedEventArgs e)
+    {
+        var kind = e.ProcessFailedKind;
+        AppLog.Write($"WebView2 process failure: {kind}");
+        if (_closing || kind is not (CoreWebView2ProcessFailedKind.BrowserProcessExited or
+            CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.RenderProcessUnresponsive))
+        {
+            return;
+        }
+
+        ResetMapPage();
+        MapView.Visibility = Visibility.Collapsed;
+        MapMessage.Visibility = Visibility.Visible;
+        if (_recoveringMap)
+        {
+            MapMessage.Text = "The map view could not recover. Restart Offline Maps to try again.";
+            return;
+        }
+
+        _recoveringMap = true;
+        MapMessage.Text = "The map view stopped unexpectedly. Reopening it…";
+        // Return from the event before using the control. WinUI clears its dead browser
+        // controller and can recreate it with the existing profile via EnsureCoreWebView2Async.
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (_closing)
+            {
+                return;
+            }
+            try
+            {
+                if (kind == CoreWebView2ProcessFailedKind.BrowserProcessExited || sender.CoreWebView2 is null)
+                {
+                    await StartMapViewAsync();
+                }
+                else
+                {
+                    sender.CoreWebView2.Reload();
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Write($"The map view could not recover: {ex}");
+                MapMessage.Text = "The map view could not recover. Restart Offline Maps to try again.";
+            }
+        });
     }
 
     private static bool IsLocal(string uri) =>
@@ -237,7 +297,17 @@ public sealed partial class MainWindow
                     _viewLatitude = Number("latitude");
                     _viewLongitude = Number("longitude");
                     _viewZoom = Number("zoom");
+                    _hasView = true;
                     ViewText.Text = $"{Format.Coordinates(_viewLatitude, _viewLongitude)} · zoom {_viewZoom:0.0}";
+                    break;
+                case "idle":
+                    _recoveringMap = false;
+                    break;
+                case "snapshotReady":
+                    if (message.GetProperty("id").GetInt32() == _snapshotId)
+                    {
+                        _snapshotReady?.TrySetResult(message.GetProperty("ready").GetBoolean());
+                    }
                     break;
                 case "contextmenu":
                     ShowMapMenu(Number("latitude"), Number("longitude"), Number("x"), Number("y"));
@@ -272,6 +342,7 @@ public sealed partial class MainWindow
             case "Ctrl+B": SetPaneVisible(!_settings.SearchPaneVisible); break;
             case "Ctrl+D": SavePlace_Click(this, new RoutedEventArgs()); break;
             case "Ctrl+Shift+C": CopyCoordinates_Click(this, new RoutedEventArgs()); break;
+            case "Ctrl+Shift+S": _ = SaveMapImageAsync(); break;
             case "Ctrl+0": Post(new JsonObject { ["kind"] = "fit" }); break;
             case "F11": ToggleFullScreen(); break;
         }
@@ -365,7 +436,7 @@ public sealed partial class MainWindow
             ["contours"] = _settings.ContourLines,
         };
         if (_settings.ViewLatitude is double lat && _settings.ViewLongitude is double lon && _settings.ViewZoom is double zoom
-            && lat >= b.South && lat <= b.North && lon >= b.West && lon <= b.East)
+            && (AppPaths.HasOverview || (lat >= b.South && lat <= b.North && lon >= b.West && lon <= b.East)))
         {
             message["view"] = new JsonObject { ["latitude"] = lat, ["longitude"] = lon, ["zoom"] = zoom };
             (_viewLatitude, _viewLongitude, _viewZoom) = (lat, lon, zoom);
@@ -378,6 +449,7 @@ public sealed partial class MainWindow
         _shownMap = status.ContentVersion;
         MapView.Visibility = Visibility.Visible;
         MapMessage.Visibility = Visibility.Collapsed;
+        UpdateMapImageCommand();
         PostPlaces();
         UpdatePlaceCommands();
     }
@@ -451,7 +523,7 @@ public sealed partial class MainWindow
 
     private void RememberView()
     {
-        if (_shownMap is not null)
+        if (_hasView)
         {
             (_settings.ViewLatitude, _settings.ViewLongitude, _settings.ViewZoom) = (_viewLatitude, _viewLongitude, _viewZoom);
         }
