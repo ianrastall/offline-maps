@@ -341,6 +341,16 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.20.0: Saved-place backups
+
+**Places > Export saved places…** writes a portable JSON backup to a new file. **Places > Import saved places…** validates the entire file and previews new places and exact duplicates. Confirming adds the new places in one write, preserving the existing entries. Windows and Android use the same backup format.
+
+The release build passed formatting, Clippy with warnings denied, 120 Rust tests, 12 Windows interop tests and the Jupiter style check. The new interop test sends a backup near the 16 MB limit through the C ABI and checks validation, duplicate handling, ID reassignment and preservation. In the installed application, the native import picker previewed one addition and one duplicate, and the store stayed byte-identical until confirmation. The new place appeared with its accented name and multiline note. The native export picker produced a JSON file matching both saved places and their timestamps.
+
+The installer upgraded 0.19.0 in place and the installed build launched from the **Offline Maps** Start Menu shortcut. The upgrade preserved the settings, saved places and active map records (51 matching file hashes) and all 62 map and layer files in the inventory. The regular profile still uses `G:\Maps`. The backup commands were exercised with sample places in a separate store. Clean-machine, screen-reader and mixed-DPI acceptance remain open.
+
+Published 18 November 2026 as [v0.20.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.0) from `7d89d3a565e4cebb9b786927e719ae14582842a5`. The 323,546,226-byte installer has SHA-256 `a8c73a0ffea479156b1527f15dca79f41ade35f14472009c25c7e7e4c50a2c97`, matching the public release asset. Windows remains the latest release.
+
 ## 0.19.0: Map images and renderer recovery
 
 - **Save map image.** File > Save map image… and Ctrl+Shift+S wait for the visible map to finish drawing, capture it, then open the Windows PNG picker. The image includes the map's visible layers, markers, scale and attributions. The app writes the complete PNG beside the destination before renaming it into place.

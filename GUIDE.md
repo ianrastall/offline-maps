@@ -21,7 +21,7 @@ GPS is available in the foreground on Android devices with satellite location ha
 
 | Platform | Where to find your data |
 | --- | --- |
-| Windows | **File > Settings > Map folder** shows the folder holding installed maps and `saved-places.json`. The default is `%LOCALAPPDATA%\Jupiter\OfflineMaps\Maps`. Settings, logs and the WebView2 profile live in `%LOCALAPPDATA%\Jupiter\OfflineMaps`. |
+| Windows | **Places > Export saved places…** writes a JSON backup to a new file. **Places > Import saved places…** previews the merge. **File > Settings > Map folder** shows where the app keeps installed maps and its active `saved-places.json`. The default is `%LOCALAPPDATA%\Jupiter\OfflineMaps\Maps`. Settings, logs and the WebView2 profile live in `%LOCALAPPDATA%\Jupiter\OfflineMaps`. |
 | Android | The app keeps maps and places in private storage. Use **Saved > Export** to write a JSON backup to a folder you choose. **Saved > Import** shows the new and duplicate counts before merging. |
 
 On Windows, **Map > Map information** shows installed data and source details. To free space in **Map > Regions…**, select the region and use **Remove…**. Use **File > Settings > Map folder > Change…** to switch drives or move the app’s maps and saved places. Windows upgrades and uninstalls preserve maps, places and settings. On Android, install a newer signed release over the existing app to retain its data. Export your saved places before clearing app storage or uninstalling Android.
@@ -37,13 +37,7 @@ cargo run --release --locked -p offline-maps-dev -- verify-transfer 'D:\Transfer
 
 Copy the entire output folder over USB. On Android, choose **Maps > Import map folder**, select the folder that contains `transfer.json` and review the included layers and dates. The folder contains the map, search index and installed optional layers for that region. An update keeps any installed optional layers absent from the folder and asks for explicit confirmation if its map is older. Allow space on the phone for the copied folder and the app’s verified private copy. The import runs while the app is open and works without internet access. [Folder update details](docs/android-app.md#android-050-offline-folder-updates)
 
-Exchange saved places separately as JSON. Close the Windows app before using the commands below against its map folder. To send places to Android, export to a new filename, copy it over USB and choose **Saved > Import**. To bring places back, export them from Android, copy the JSON to Windows, preview the merge and run it with `--apply` if the preview is correct. Reopen the Windows app after the merge.
-
-```powershell
-cargo run --locked -p offline-maps-dev -- places-export 'G:\Maps' 'D:\Transfers\desktop-places.json'
-cargo run --locked -p offline-maps-dev -- places-import 'G:\Maps' 'D:\Transfers\phone-places.json'
-cargo run --locked -p offline-maps-dev -- places-import 'G:\Maps' 'D:\Transfers\phone-places.json' --apply
-```
+Exchange saved places separately as JSON. To send places to Android, choose **Places > Export saved places…** on Windows, copy the new file to the phone over USB and choose **Saved > Import**. To bring places back, choose **Saved > Export** on Android, copy the JSON to Windows and open it through **Places > Import saved places…**. Review how many places will be added and how many are duplicates before confirming.
 
 Backups contain place coordinates, names and notes. The merge keeps existing entries and skips exact name, note and coordinate matches. [Saved-place backup details](docs/android-app.md#android-030-saved-place-backups-and-preparation)
 
@@ -98,7 +92,7 @@ The first command builds the app for development. The release script runs format
 
 ### Build Android
 
-Use the `android-v0.5.0` tag to reproduce the published preview. On `main`, the GPS marker test currently fails with `ReferenceError: prepareSnapshot is not defined`, which stops the Android build before Gradle runs.
+Use the `android-v0.6.0` tag to reproduce the published preview.
 
 On Windows, set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to the Android SDK. Install SDK platform 36, build tools 36.1.0, NDK `30.0.16248370`, Python 3 and `cargo-ndk`. Prepare the renderer assets, then run these commands from the repository root.
 
@@ -126,7 +120,7 @@ Keep downloaded datasets under `data/`. Keep private place backups and generated
 ### Further reading
 
 - [Data providers, formats and storage contract](docs/sources-and-architecture.md)
-- [Windows release and validation history](docs/validation.md#0190-map-images-and-renderer-recovery)
+- [Windows release and validation history](docs/validation.md#0200-saved-place-backups)
 - [Android release and device verification history](docs/android-app.md)
 - [North America and Android project plan](docs/north-america-and-android.md) and [worldwide expansion plan](docs/worldwide.md)
-- [Project brief](docs/project-brief.md), [desktop milestone handoff](docs/desktop-handoff.md) and [renderer decisions for Windows](docs/renderer-proof.md) and [Android](docs/android-renderer-proof.md)
+- [Project brief](docs/project-brief.md), [Windows 0.19.0 handoff](docs/desktop-handoff.md) and [renderer decisions for Windows](docs/renderer-proof.md) and [Android](docs/android-renderer-proof.md)

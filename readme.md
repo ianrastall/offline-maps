@@ -6,8 +6,8 @@ Download detailed road maps for Windows or Android and use them without an inter
 
 | Platform | Download | First map |
 | --- | --- | --- |
-| Windows 11 24H2 or later, x64 | [Windows 0.19.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.19.0) | Run `OfflineMaps-0.19.0-win-x64-setup.exe`, then open **Offline Maps** from Start. Choose **Map > Regions…**, select a region and click **Download map**. |
-| Android 10 or later, arm64 or x86-64 | [Android 0.5.0 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.5.0) | Open `OfflineMaps-android-0.5.0-release.apk` on the device and follow the install prompts. Open **Maps > Download maps**, then select and download a region. Wi-Fi only is on by default. |
+| Windows 11 24H2 or later, x64 | [Windows 0.20.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.0) | Run `OfflineMaps-0.20.0-win-x64-setup.exe`, then open **Offline Maps** from Start. Choose **Map > Regions…**, select a region and click **Download map**. |
+| Android 10 or later, arm64 or x86-64 | [Android 0.6.0 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.6.0) | Open `OfflineMaps-android-0.6.0-release.apk` on the device and follow the install prompts. Open **Maps > Download maps**, then select and download a region. Wi-Fi only is on by default. |
 
 Download the areas you’ll need while you’re connected. Wait until each region is ready, then disconnect and check that you can zoom to street level and find a place you expect to use. You can also copy a region from Windows to Android over USB. [User and developer guide](GUIDE.md#using-offline-maps)
 
@@ -16,7 +16,7 @@ Download the areas you’ll need while you’re connected. Wait until each regio
 - Browse detailed roads and labels across installed regions. The built-in overview provides context around them.
 - Search for places, streets, landmarks and transit. Add the optional **stations and addresses** data for house numbers, fuel and charging stations, and outdoor places such as shelters and drinking water.
 - View optional terrain shading and contours, plus mapped FEMA flood hazard zones and USGS public lands in supported U.S. regions.
-- Save places on either platform. On Windows, save the visible map as a PNG with **File > Save map image…** or **Ctrl+Shift+S**. On Android, show your satellite GPS position while the app is open.
+- Save places on either platform and exchange JSON backups between Windows and Android. On Windows, save the visible map as a PNG with **File > Save map image…** or **Ctrl+Shift+S**. On Android, show your satellite GPS position while the app is open.
 
 Routing and live traffic, closures and active flooding are outside the app’s scope. Some Indic and Southeast Asian scripts and Thaana can render with broken letter shapes.
 
