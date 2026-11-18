@@ -36,6 +36,7 @@ Android [0.5.0 preview](https://github.com/ianrastall/offline-maps/releases/tag/
 Planned: Geofabrik's region maps republished in this repository's releases (processed stations and addresses are published since 0.18.0) and further desktop-to-phone transfer support. See the [North America and Android plan](docs/north-america-and-android.md) and [worldwide plan](docs/worldwide.md).
 
 - [Project brief](docs/project-brief.md)
+- [Desktop handoff: fixes, PNG snapshots and release delivery](docs/desktop-handoff.md) (17 November 2026)
 - [North America and Android plan](docs/north-america-and-android.md)
 - [Worldwide plan](docs/worldwide.md) (proposed 14 November 2026)
 - [Sources and technical decisions](docs/sources-and-architecture.md)
