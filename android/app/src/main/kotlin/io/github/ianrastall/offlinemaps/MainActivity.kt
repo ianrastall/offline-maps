@@ -258,6 +258,7 @@ class MainActivity : ComponentActivity() {
             }, confirmButton = { TextButton(onClick = { downloadRegion = null; panel = "downloads" }) { Text("Download maps") } },
             dismissButton = { TextButton(onClick = { panel = null }) { Text("Close") } })
         if (panel == "downloads") DownloadsDialog(model, downloadRegion) { panel = null }
+        model.transferReview?.let { TransferReview(model, it) }
         if (panel == "saved") SavedPlacesDialog(model,
             onShow = { place -> model.show(place); selected = place; panel = null },
             onDismiss = { model.cancelPlacesImport(); panel = null })

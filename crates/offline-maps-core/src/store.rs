@@ -193,7 +193,10 @@ impl PackageStore {
     /// still open elsewhere (for example by the renderer) is left for a later
     /// prune. Returns the versions that could not be removed.
     pub fn prune(&self, region_id: &str) -> Vec<(String, io::Error)> {
-        let active = self.active(region_id).ok().flatten().map(|a| a.version);
+        let Ok(Some(active)) = self.active(region_id) else {
+            return Vec::new();
+        };
+        let active = active.version;
         let Ok(entries) = fs::read_dir(self.region_dir(region_id).join("versions")) else {
             return Vec::new();
         };
@@ -201,7 +204,7 @@ impl PackageStore {
             .flatten()
             .filter_map(|entry| {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                (Some(&name) != active.as_ref())
+                (name != active)
                     .then(|| fs::remove_dir_all(entry.path()).err().map(|e| (name, e)))
                     .flatten()
             })

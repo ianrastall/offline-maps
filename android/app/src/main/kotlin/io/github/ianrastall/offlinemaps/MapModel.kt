@@ -12,6 +12,7 @@ import io.github.ianrastall.offlinemaps.core.NativeCore
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 
 class MapModel(application: Application) : AndroidViewModel(application) {
     var status by mutableStateOf<JSONObject?>(null)
@@ -39,15 +40,29 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     var core: CoreStore? = null
         private set
     private val worker = Executors.newSingleThreadExecutor()
+    private val importWorker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val prefs = application.getSharedPreferences("map", 0)
     private var importer: MapImport? = null
+    private var stagedTransfer: MapImport.Staged? = null
+    private var cleared = false
+    var transferReview by mutableStateOf<JSONObject?>(null)
+        private set
+    private val importCancelPoll = object : Runnable {
+        override fun run() {
+            val job = importer ?: return
+            if (!job.cancelled.get()) return
+            core?.use { NativeCore.cancel(it) }
+            main.postDelayed(this, 100)
+        }
+    }
     private var searchGeneration = 0
     private val session = (application as OfflineMapsApplication).session
     val downloads = session.downloads
     private val contentChanged: () -> Unit = { runCatching { task { refresh(reload = true) } }; Unit }
     val workText: String? get() = if (downloads.active) downloads.message else busy
-    val hasWork: Boolean get() = busy != null || downloads.active
+        ?: if (session.importing) if (transferReview != null) "Map import awaiting confirmation…" else "Finishing map import…" else null
+    val hasWork: Boolean get() = busy != null || downloads.active || session.importing
     val canCancelWork: Boolean get() = downloads.active || importer != null
 
     init {
@@ -61,8 +76,8 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun task(clearBusy: Boolean = false, work: () -> Unit) {
-        worker.execute {
+    private fun task(clearBusy: Boolean = false, executor: ExecutorService = worker, work: () -> Unit) {
+        executor.execute {
             runCatching(work).onFailure { e -> main.post { error = (e.message ?: e.toString()).removePrefix("Rust error: ") } }
             if (clearBusy) main.post { busy = null }
         }
@@ -183,19 +198,61 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     }
     fun importMap(tree: Uri) {
         if (hasWork || core == null) return
-        busy = "Reading transfer…"
+        if (!session.claimImport(this)) return
+        busy = "Reading transfer…"; error = null; notice = null; transferReview = null
         val job = MapImport(getApplication(), core!!).also { importer = it }
-        task(clearBusy = true) {
+        task(clearBusy = true, executor = importWorker) {
+            var readyForReview = false
             try {
-                job.run(tree) { phase -> main.post { busy = phase } }
-                refresh(reload = true)
-            } finally { importer = null }
+                stagedTransfer?.close(); stagedTransfer = null
+                val staged = job.stage(tree) { phase -> main.post { busy = phase } }
+                stagedTransfer = staged
+                readyForReview = true
+                main.post { if (!cleared) transferReview = staged.review }
+            } finally {
+                importer = null; main.removeCallbacks(importCancelPoll)
+                if (!readyForReview) session.releaseImport(this)
+            }
         }
     }
-    fun cancelImport() { importer?.cancelled?.set(true); core?.use { NativeCore.cancel(it) } }
+    fun discardTransfer() {
+        if (busy != null) { cancelImport(); return }
+        transferReview = null
+        task(executor = importWorker) { clearStagedTransfer() }
+    }
+    private fun clearStagedTransfer() {
+        try { stagedTransfer?.close() }
+        finally { stagedTransfer = null; session.releaseImport(this) }
+    }
+    fun confirmTransfer() {
+        if (busy != null || transferReview == null || core == null) return
+        busy = "Verifying and installing the region…"; error = null; notice = null
+        val job = MapImport(getApplication(), core!!).also { importer = it }
+        task(clearBusy = true, executor = importWorker) {
+            try {
+                val staged = stagedTransfer ?: error("Select the transfer folder again.")
+                job.install(staged)
+                main.post { notice = "The imported region is ready offline." }
+            } finally {
+                session.changed()
+                try { clearStagedTransfer() }
+                finally {
+                    importer = null; main.removeCallbacks(importCancelPoll)
+                    main.post { transferReview = null }
+                }
+            }
+        }
+    }
+    fun cancelImport() {
+        val job = importer ?: return
+        job.cancelled.set(true)
+        core?.use { NativeCore.cancel(it) }
+        main.removeCallbacks(importCancelPoll)
+        main.post(importCancelPoll)
+    }
     fun cancelWork() { if (downloads.active) downloads.pause() else cancelImport() }
     fun startDownload(region: JSONObject, target: Int) {
-        if (busy != null) return
+        if (busy != null || session.importing) return
         error = null
         downloads.start(DownloadRequest(region.getString("id"), target), region.optLong(when (target) {
             1 -> "mapBytes"; 2 -> "extrasBytes"; 3 -> "terrainBytes"; else -> "overlayBytes"
@@ -219,11 +276,11 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         page?.post(JSONObject().put("kind", "outdoor").put("visible", visible))
     }
     override fun onCleared() {
+        cleared = true
         session.unlisten(contentChanged)
-        importer?.let {
-            it.cancelled.set(true)
-            core?.use { handle -> NativeCore.cancel(handle) }
-        }
+        cancelImport()
+        importWorker.execute { clearStagedTransfer() }
+        importWorker.shutdown()
         // The application session owns the native handle and download worker.
         // Closing a screen must not cancel a service-owned download.
         worker.shutdown()

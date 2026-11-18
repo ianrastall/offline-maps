@@ -359,6 +359,12 @@ impl Service {
         let leak = |s: &str| -> Option<&'static str> {
             (!s.is_empty()).then(|| &*Box::leak(s.to_owned().into_boxed_str()))
         };
+        offline_maps_core::transfer_update::recover(&PackageStore::new(&root)).map_err(|e| {
+            error(
+                ErrorKind::InvalidData,
+                format!("Map transfer recovery could not finish: {e}"),
+            )
+        })?;
         let places = match SavedPlaces::open(&root) {
             Ok(places) => Places::Ready(places),
             Err(e) => Places::Unreadable(e.to_string()),
@@ -973,6 +979,15 @@ impl Service {
             self.busy.store(false, Ordering::Release);
             return Err(e);
         }
+        let guard = BusyGuard(self);
+        if offline_maps_core::transfer_update::recover(&self.store).map_err(|e| {
+            error(
+                ErrorKind::InvalidData,
+                format!("Map transfer recovery could not finish: {e}"),
+            )
+        })? {
+            self.reload();
+        }
         self.cancel.store(false, Ordering::Release);
         *lock(&self.progress) = pb::ProgressEvent {
             active: true,
@@ -982,7 +997,7 @@ impl Service {
             region_name: region.map(|r| r.name.to_owned()).unwrap_or_default(),
             ..Default::default()
         };
-        Ok(BusyGuard(self))
+        Ok(guard)
     }
 
     fn report(&self, progress: Progress) {
@@ -1321,12 +1336,47 @@ impl Service {
         outcome
     }
 
-    /// Adds a verified offline transfer without changing existing regions.
-    pub fn import_transfer(&self, staged: &Path) -> Outcome<String> {
+    /// Verifies a private copy for review. The destination is unchanged.
+    pub fn preview_transfer(&self, staged: &Path) -> Outcome<(pb::Status, u64, bool)> {
         let _busy = self.begin(pb::UpdateTarget::Map, None)?;
-        let id = offline_maps_core::transfer::install(&self.store, staged, &self.cancel)
+        lock(&self.progress).phase = "Verifying".into();
+        let region = offline_maps_core::transfer::verify(staged, &self.cancel)
             .map_err(|e| error(ErrorKind::InvalidData, e.to_string()))?;
+        let manifest = offline_maps_core::transfer::Transfer::read(staged)
+            .map_err(|e| error(ErrorKind::InvalidData, e.to_string()))?;
+        let bytes = manifest
+            .files
+            .values()
+            .try_fold(0u64, |sum, file| sum.checked_add(file.bytes))
+            .ok_or_else(|| error(ErrorKind::InvalidData, "The transfer size is invalid."))?;
+        let incoming = Service::open(&pb::Config {
+            store_directory: staged.to_string_lossy().into_owned(),
+            prepared_extras_only: true,
+            ..Default::default()
+        })?
+        .status();
+        Ok((
+            incoming,
+            bytes,
+            self.store.region_dir(&region).join("active.json").exists(),
+        ))
+    }
+
+    /// Applies a verified transfer, journaling all provided map/layer pointers.
+    pub fn import_transfer(&self, staged: &Path, replace: bool) -> Outcome<String> {
+        let _busy = self.begin(pb::UpdateTarget::Map, None)?;
+        lock(&self.progress).phase = "Verifying".into();
+        let outcome =
+            offline_maps_core::transfer_update::install(&self.store, staged, replace, &self.cancel);
+        // Reload even after an error: recovery may have restored old pointers.
         self.reload();
+        let id = outcome.map_err(|e| error(ErrorKind::InvalidData, e.to_string()))?;
+        if offline_maps_core::transfer_update::recover(&self.store).is_ok() {
+            self.store.prune(&id);
+            prune_extras(&self.store, &id);
+            prune_terrain(&self.store, &id);
+            prune_overlays(&self.store, &id);
+        }
         Ok(id)
     }
 

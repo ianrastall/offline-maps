@@ -380,14 +380,37 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_imp
     _class: JClass<'local>,
     handle: jlong,
     staged: JString<'local>,
+    replace: jni::sys::jboolean,
 ) -> JObject<'local> {
     unowned
         .with_env(|env| -> Result<JObject<'local>> {
             let path = staged.try_to_string(env)?;
-            let id = unsafe { service(handle) }?.import_transfer(std::path::Path::new(&path))?;
+            let id = unsafe { service(handle) }?
+                .import_transfer(std::path::Path::new(&path), replace)?;
             text(env, &id)
         })
         .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_previewTransfer<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    staged: JString<'local>,
+) -> JObject<'local> {
+    unowned.with_env(|env| -> Result<JObject<'local>> {
+        let path = staged.try_to_string(env)?;
+        let service = unsafe { service(handle) }?;
+        let (incoming, bytes, replacing) = service.preview_transfer(std::path::Path::new(&path))?;
+        let incoming = status_json(&incoming, false)["regions"][0].clone();
+        let current = status_json(&service.status(), false)["regions"].as_array()
+            .and_then(|items| items.iter().find(|r| r["id"] == incoming["id"]))
+            .cloned().unwrap_or(Value::Null);
+        text(env, &json!({"incoming": incoming, "current": current, "bytes": bytes, "replacing": replacing}).to_string())
+    }).resolve::<ThrowRuntimeExAndDefault>()
 }
 
 #[unsafe(no_mangle)]

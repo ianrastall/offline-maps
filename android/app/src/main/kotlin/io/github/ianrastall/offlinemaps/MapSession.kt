@@ -1,6 +1,11 @@
 package io.github.ianrastall.offlinemaps
 
 import android.app.Application
+import android.os.Handler
+import android.os.Looper
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import java.io.File
 import java.util.concurrent.CopyOnWriteArraySet
 
@@ -12,9 +17,21 @@ class OfflineMapsApplication : Application() {
 class MapSession(private val app: Application) {
     @Volatile private var core: CoreStore? = null
     private val listeners = CopyOnWriteArraySet<() -> Unit>()
-    val downloads = RegionDownloads(app, { core }, {
-        listeners.forEach { listener -> runCatching(listener) }
-    })
+    private val main = Handler(Looper.getMainLooper())
+    private var importOwner: Any? = null
+    var importing by mutableStateOf(false)
+        private set
+    val downloads = RegionDownloads(app, { core }, { changed() })
+
+    fun claimImport(owner: Any): Boolean {
+        if (importOwner != null) return false
+        importOwner = owner; importing = true
+        return true
+    }
+    fun releaseImport(owner: Any) {
+        main.post { if (importOwner === owner) { importOwner = null; importing = false } }
+    }
+    fun changed() { listeners.forEach { listener -> runCatching(listener) } }
 
     @Synchronized fun open(): CoreStore {
         core?.let { return it }

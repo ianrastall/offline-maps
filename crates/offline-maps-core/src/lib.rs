@@ -20,6 +20,7 @@ pub mod terrain;
 pub mod terrain_sources;
 pub mod time;
 pub mod transfer;
+pub mod transfer_update;
 
 use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};

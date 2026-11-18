@@ -14,7 +14,11 @@ class MapImport(private val context: Context, private val core: CoreStore) {
     val cancelled = AtomicBoolean(false)
     private fun checkCancelled() { check(!cancelled.get()) { "Import cancelled." } }
 
-    fun run(tree: Uri, progress: (String) -> Unit): String {
+    class Staged(val directory: File, val review: JSONObject) : AutoCloseable {
+        override fun close() { directory.deleteRecursively() }
+    }
+
+    fun stage(tree: Uri, progress: (String) -> Unit): Staged {
         val cache = mutableMapOf<String, Map<String, String>>()
         fun children(id: String): Map<String, String> = cache.getOrPut(id) {
             val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
@@ -55,7 +59,6 @@ class MapImport(private val context: Context, private val core: CoreStore) {
             total = Math.addExact(total, size)
         }
         val maps = File(context.noBackupFilesDir, "maps")
-        check(!File(maps, region).exists()) { "That region is already installed. Existing maps are kept." }
         check(maps.usableSpace > total + (64L shl 20)) { "Not enough free space. This import needs ${total / 1_000_000} MB plus 64 MB." }
         val staging = File(maps, ".imports/${UUID.randomUUID()}").apply { check(mkdirs()) }
         try {
@@ -86,7 +89,17 @@ class MapImport(private val context: Context, private val core: CoreStore) {
             }
             checkCancelled()
             progress("Verifying map, search and layers…")
-            return core.use { NativeCore.importTransfer(it, staging.absolutePath) }
-        } finally { staging.deleteRecursively() }
+            val review = core.use { JSONObject(NativeCore.previewTransfer(it, staging.absolutePath)) }
+            checkCancelled()
+            return Staged(staging, review)
+        } catch (failure: Throwable) {
+            staging.deleteRecursively()
+            throw failure
+        }
+    }
+
+    fun install(staged: Staged): String {
+        checkCancelled()
+        return core.use { NativeCore.importTransfer(it, staged.directory.absolutePath, staged.review.getBoolean("replacing")) }
     }
 }

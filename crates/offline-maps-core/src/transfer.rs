@@ -216,7 +216,7 @@ pub fn install(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::mbtiles::tests::TempFile;
 
@@ -311,10 +311,17 @@ mod tests {
         assert!(err.to_string().contains("checksum"));
     }
 
-    fn prepared(root: &Path) {
+    pub(crate) fn prepared(root: &Path) {
+        prepared_named(root, "Original map");
+    }
+
+    pub(crate) fn prepared_named(root: &Path, name: &'static str) {
         use crate::mbtiles::TilePackage;
         use crate::mbtiles::tests::{build_package, valid_metadata};
-        let package = build_package(&valid_metadata(), &[(0, 0, 0, &[]), (1, 0, 0, &[])]);
+        let mut metadata = valid_metadata();
+        metadata.retain(|(key, _)| *key != "name");
+        metadata.push(("name", name));
+        let package = build_package(&metadata, &[(0, 0, 0, &[]), (1, 0, 0, &[])]);
         let none = AtomicBool::new(false);
         let record = verify_package(
             &package.0,
