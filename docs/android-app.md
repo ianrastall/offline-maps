@@ -118,6 +118,8 @@ After cleanup, the final app again found McPherson Square in the downloaded DC d
 
 ## Android 0.4.0: downloads with the screen off
 
+Published 17 November 2026 as [android-v0.4.0](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.4.0), built from `55c1d88ff5edcbe723213445d1a3b248960e11c8`. The signed APK is 128,055,119 bytes; SHA-256 `780047df5a23e67e300603ad1f2920f70d125434108a4a4d54bb114081215a25`, matching GitHub's asset digest and the installed Galaxy APK. The signing certificate is unchanged. It is an Android prerelease; Windows remains the latest desktop release.
+
 Downloads now run in a user-started Android `dataSync` foreground service. Switching apps, turning off the screen or closing the map screen no longer pauses them. The service shows progress and Pause in a notification and posts a result when it finishes. Downloads no longer keep the display awake. A bounded partial wake lock keeps processing awake only while the service is working and is released on completion, pause, failure or service destruction.
 
 The application session owns one native map store shared by map screens and the service. Screens register/unregister refresh listeners; destroying a screen releases its own worker and WebView without closing the store beneath an active transfer. A new screen attaches to the ongoing transfer. Wi-Fi only remains the default, sockets remain bound to the selected network, and connection loss pauses rather than switching an existing transfer to mobile data. No boot receiver or automatic retry was added. Force-stop/process death leaves staged data and the remembered region/layer for an explicit Resume after reopening.
