@@ -24,7 +24,7 @@ test('GPS creates a positioned marker, follows fresh fixes and keeps stale fixes
       setAttribute(name, value) { this.attributes[name] = value; },
     }) },
   };
-  const start = source.indexOf('const handlers = {');
+  const start = source.indexOf('function prepareSnapshot(');
   const end = source.indexOf("\nhost?.addEventListener", start);
   assert.ok(start >= 0 && end > start);
   const handlers = vm.runInNewContext(source.slice(start, end) + '\nhandlers', environment);

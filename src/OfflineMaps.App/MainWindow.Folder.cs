@@ -28,6 +28,11 @@ public sealed partial class MainWindow
         {
             return;
         }
+        if (_exchangingPlaces)
+        {
+            ShowError("The map folder cannot be changed", "Finish the saved-place backup or import first.");
+            return;
+        }
         string from = AppPaths.StoreDir;
         string done = $"Map folder changed to {folder}";
         string? leftover = null;

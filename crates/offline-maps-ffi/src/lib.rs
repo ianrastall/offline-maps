@@ -17,7 +17,7 @@
 //! - Expected failures (no map installed, a network error) are not statuses:
 //!   they arrive as `Response.error` with `STATUS_OK`.
 //! - Input bytes stay owned by the caller and are read only during the call.
-//!   Requests larger than 1 MiB are rejected.
+//!   Requests are bounded by the 16 MiB portable backup limit plus protobuf framing.
 //! - Result bytes are valid until `om_result_free` and must be copied first.
 //!   Each result is freed exactly once; `om_destroy` is called exactly once,
 //!   after every other call on that core has returned.
@@ -27,6 +27,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use offline_maps_core::places::MAX_BACKUP_BYTES;
 use prost::Message;
 
 /// Generated from proto/offline_maps.proto.
@@ -49,7 +50,8 @@ pub const STATUS_PANIC: u32 = 3;
 pub const STATUS_UNUSABLE: u32 = 4;
 pub const STATUS_CREATE_FAILED: u32 = 5;
 
-const MAX_REQUEST_BYTES: usize = 1 << 20;
+const MAX_CONFIG_BYTES: usize = 1 << 20;
+const MAX_REQUEST_BYTES: usize = MAX_BACKUP_BYTES + 64;
 
 pub struct Core {
     service: Service,
@@ -65,8 +67,8 @@ fn into_result(bytes: Vec<u8>) -> *mut ResultBuffer {
 
 /// # Safety
 /// `bytes` must be valid for `length` bytes when non-null.
-unsafe fn input<'a>(bytes: *const u8, length: usize) -> Option<&'a [u8]> {
-    if length > MAX_REQUEST_BYTES || (bytes.is_null() && length > 0) {
+unsafe fn input<'a>(bytes: *const u8, length: usize, limit: usize) -> Option<&'a [u8]> {
+    if length > limit || (bytes.is_null() && length > 0) {
         return None;
     }
     if length == 0 {
@@ -100,7 +102,7 @@ pub unsafe extern "C" fn om_create(
         *out_core = ptr::null_mut();
         *out_error = ptr::null_mut();
     }
-    let Some(bytes) = (unsafe { input(config, length) }) else {
+    let Some(bytes) = (unsafe { input(config, length, MAX_CONFIG_BYTES) }) else {
         return STATUS_INVALID_ARGUMENT;
     };
     let outcome = catch_unwind(|| {
@@ -165,6 +167,17 @@ fn dispatch(service: &Service, request: pb::Request) -> pb::Response {
             service.move_store(&request).map(|r| Some(R::MoveStore(r)))
         }
         Some(Command::RemoveMovedSource(_)) => service.remove_moved_source().map(|()| None),
+        Some(Command::ExportPlaces(_)) => service
+            .export_places()
+            .map(|json| Some(R::PlacesBackup(pb::PlacesBackup { json }))),
+        Some(Command::ImportPlaces(request)) => service
+            .import_places(&request.json, request.apply)
+            .map(|result| {
+                Some(R::PlacesImport(pb::PlacesImportResult {
+                    added: result.added as u32,
+                    skipped: result.skipped as u32,
+                }))
+            }),
     };
     match result {
         Ok(result) => pb::Response {
@@ -216,7 +229,7 @@ pub unsafe extern "C" fn om_call(
         return STATUS_INVALID_ARGUMENT;
     }
     unsafe { *out_result = ptr::null_mut() };
-    let Some(bytes) = (unsafe { input(request, length) }) else {
+    let Some(bytes) = (unsafe { input(request, length, MAX_REQUEST_BYTES) }) else {
         return STATUS_INVALID_ARGUMENT;
     };
     unsafe {

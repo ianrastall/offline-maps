@@ -141,11 +141,13 @@ public sealed partial class MainWindow
     private void UpdatePlaceCommands()
     {
         bool place = Results.SelectedItem is PaneItem { PlaceId: not null };
-        bool usable = _status is not null && _status.PlacesProblem.Length == 0;
+        bool usable = CanExchangePlaces;
         EditPlaceItem.IsEnabled = place && usable;
         RemovePlaceItem.IsEnabled = place && usable;
         SavePlaceItem.IsEnabled = usable && (_shownMap is not null || Results.SelectedItem is PaneItem);
         SaveButton.IsEnabled = SavePlaceItem.IsEnabled;
+        ExportPlacesItem.IsEnabled = usable;
+        ImportPlacesItem.IsEnabled = usable;
         CopyCoordinatesItem.IsEnabled = _shownMap is not null || Results.SelectedItem is PaneItem;
     }
 
@@ -178,7 +180,7 @@ public sealed partial class MainWindow
 
     private async Task AddPlaceAsync(double latitude, double longitude, string name)
     {
-        if (_core is not { } core)
+        if (!CanExchangePlaces || _core is not { } core)
         {
             return;
         }
@@ -204,7 +206,7 @@ public sealed partial class MainWindow
 
     private async void EditPlace_Click(object sender, RoutedEventArgs e)
     {
-        if (_core is not { } core || Results.SelectedItem is not PaneItem { Place: { } place })
+        if (!CanExchangePlaces || _core is not { } core || Results.SelectedItem is not PaneItem { Place: { } place })
         {
             return;
         }
@@ -229,7 +231,7 @@ public sealed partial class MainWindow
 
     private async void RemovePlace_Click(object sender, RoutedEventArgs e)
     {
-        if (_core is not { } core || Results.SelectedItem is not PaneItem { Place: { } place })
+        if (!CanExchangePlaces || _core is not { } core || Results.SelectedItem is not PaneItem { Place: { } place })
         {
             return;
         }

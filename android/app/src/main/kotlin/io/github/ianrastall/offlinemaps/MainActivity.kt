@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -127,9 +128,8 @@ class MainActivity : ComponentActivity() {
         model.position(stale = true)
         super.onPause()
     }
-    override fun onDestroy() {
-        model.page?.view?.destroy(); model.page = null
-        super.onDestroy()
+    private fun currentFix() = model.fix?.takeIf {
+        model.gpsWanted && fixAge(it) <= 30_000 && locations.isProviderEnabled(LocationManager.GPS_PROVIDER)
     }
 
     @Composable
@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
             if (uri != null) model.importMap(uri)
         }
         val ready = model.status != null
-        val current = model.fix?.takeIf { model.gpsWanted && fixAge(it) <= 30_000 && locations.isProviderEnabled(LocationManager.GPS_PROVIDER) }
+        val current = currentFix()
         SideEffect {
             if ((model.gpsWanted && model.following) || model.busy != null) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -175,21 +175,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    if (ready) key(model.rendererGeneration) { AndroidView(factory = {
+                    if (ready && !model.rendererRetryRequired) key(model.rendererGeneration) { AndroidView(factory = {
                         WebMap(this@MainActivity, model.core!!, model::initMessage, object : WebMap.Listener {
                             override fun onView(latitude: Double, longitude: Double, zoom: Double) = model.moved(latitude, longitude, zoom)
                             override fun onIdle(milliseconds: Long) {
+                                model.rendererReady()
                                 model.page?.post(JSONObject().put("kind", "places").put("items", model.status!!.getJSONArray("places")))
-                                model.position(stale = current == null)
+                                model.position(stale = !resumed || currentFix() == null)
                             }
                             override fun onError(message: String) { model.error = message }
                             override fun onGesture() { model.following = false }
                             override fun onRegion(id: String) { downloadRegion = id; panel = "downloads" }
-                            override fun onRendererGone() {
-                                model.page = null
-                                model.error = "The map renderer stopped and is being reloaded."
-                                model.rendererGeneration++
-                            }
+                            override fun onRendererGone() = model.rendererStopped()
                             override fun onSave(latitude: Double, longitude: Double) {
                                 model.following = false
                                 saveAt = JSONObject().put("latitude", latitude).put("longitude", longitude)
@@ -198,8 +195,22 @@ class MainActivity : ComponentActivity() {
                             override fun onPlace(id: Long) {
                                 selected = model.status!!.getJSONArray("places").objects().find { it.getLong("id") == id }
                             }
-                        }).also { model.page = it; it.load() }.view
-                    }, modifier = Modifier.fillMaxSize()) }
+                        }).also { model.page = it; it.load() }
+                    }, modifier = Modifier.fillMaxSize(), onRelease = { page ->
+                        if (model.page === page) model.page = null
+                        page.close()
+                    }) }
+                    if (model.rendererRecovering) {
+                        Surface(Modifier.align(Alignment.Center)) {
+                            Text("Reloading map…", Modifier.padding(12.dp))
+                        }
+                    }
+                    if (model.rendererRetryRequired) {
+                        Column(Modifier.align(Alignment.Center).padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("The map renderer stopped.")
+                            TextButton(onClick = model::retryRenderer) { Text("Reload map") }
+                        }
+                    }
                 }
                 selected?.let { place ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {

@@ -86,6 +86,37 @@ public class MapCoreTests
     }
 
     [Fact]
+    public void SavedPlaceBackupPreviewsAndMergesAcrossStores()
+    {
+        using var source = new TempStore();
+        using var destination = new TempStore();
+        using var phone = MapCore.Open(source.Path);
+        using var desktop = MapCore.Open(destination.Path);
+        var original = desktop.AddPlace("Library", "", 40, -89);
+        var shelter = phone.AddPlace("Café Shelter", "East door\nBring ID ✓", 41, -88);
+        phone.AddPlace("Library", "", 40, -89);
+        // A valid backup can exceed the old 1 MiB request limit.
+        string backup = phone.ExportPlaces().PadRight(16 * 1024 * 1024 - 4);
+
+        var preview = desktop.ImportPlaces(backup);
+        Assert.Equal(1u, preview.Added);
+        Assert.Equal(1u, preview.Skipped);
+        Assert.Equal(original, Assert.Single(desktop.GetStatus().Places));
+
+        Assert.Equal(preview, desktop.ImportPlaces(backup, apply: true));
+        var places = desktop.GetStatus().Places;
+        Assert.Equal(2, places.Count);
+        Assert.Contains(original, places);
+        Assert.Contains(places, place => place.Id != shelter.Id &&
+            place.Name == shelter.Name && place.Note == shelter.Note && place.CreatedAt == shelter.CreatedAt);
+        var repeated = desktop.ImportPlaces(backup, apply: true);
+        Assert.Equal(0u, repeated.Added);
+        Assert.Equal(2u, repeated.Skipped);
+        Assert.Throws<MapCoreException>(() => desktop.ImportPlaces("{", apply: true));
+        Assert.Equal(places, desktop.GetStatus().Places);
+    }
+
+    [Fact]
     public void RelativeStoreIsATypedCreationError()
     {
         var error = Assert.Throws<MapCoreException>(() => MapCore.Open("relative-folder"));

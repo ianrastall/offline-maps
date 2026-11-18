@@ -11,6 +11,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat
@@ -34,7 +35,7 @@ class WebMap(
     private val core: CoreStore,
     private val init: () -> JSONObject,
     private val listener: Listener,
-) {
+) : FrameLayout(context) {
     interface Listener {
         fun onView(latitude: Double, longitude: Double, zoom: Double)
         fun onIdle(milliseconds: Long)
@@ -46,12 +47,13 @@ class WebMap(
         fun onRegion(id: String)
     }
 
-    val view = WebView(context)
+    private val view = WebView(context)
     private var proxy: JavaScriptReplyProxy? = null
     private var started = 0L
     private val assets = context.assets
 
     init {
+        addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         // Stop following before the next satellite update can interrupt a pan.
         // Return false so WebView keeps its normal touch/accessibility handling.
         view.setOnTouchListener { _, event ->
@@ -69,8 +71,7 @@ class WebMap(
         }
         view.webViewClient = object : WebViewClient() {
             override fun onRenderProcessGone(webView: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
-                proxy = null
-                webView.destroy()
+                close()
                 listener.onRendererGone()
                 return true
             }
@@ -102,6 +103,13 @@ class WebMap(
     fun load() {
         started = SystemClock.elapsedRealtime()
         view.loadUrl("https://$HOST/index.html")
+    }
+
+    fun close() {
+        if (view.parent !== this) return
+        proxy = null
+        removeView(view)
+        view.destroy()
     }
 
     fun post(message: JSONObject) {

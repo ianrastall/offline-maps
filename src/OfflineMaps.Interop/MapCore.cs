@@ -130,6 +130,12 @@ public sealed class MapCore : IDisposable
 
     public void ResetPlaces() => Call(new Request { ResetPlaces = new ResetPlaces() });
 
+    public string ExportPlaces() =>
+        Call(new Request { ExportPlaces = new ExportPlaces() }).PlacesBackup.Json;
+
+    public PlacesImportResult ImportPlaces(string json, bool apply = false) =>
+        Call(new Request { ImportPlaces = new ImportPlaces { Json = json, Apply = apply } }).PlacesImport;
+
     /// <summary>
     /// Downloads and activates a region's newer map, extras, terrain or overlays. Blocks for the whole
     /// download. With <paramref name="checkOnly"/>, only asks the server whether it has something newer.

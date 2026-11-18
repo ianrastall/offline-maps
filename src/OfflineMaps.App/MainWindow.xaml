@@ -81,6 +81,9 @@
                 </MenuFlyoutItem>
                 <MenuFlyoutItem x:Name="EditPlaceItem" Click="EditPlace_Click" Text="Edit place…" />
                 <MenuFlyoutItem x:Name="RemovePlaceItem" Click="RemovePlace_Click" Text="Remove place…" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem x:Name="ExportPlacesItem" Click="ExportPlaces_Click" IsEnabled="False" Text="Export saved places…" />
+                <MenuFlyoutItem x:Name="ImportPlacesItem" Click="ImportPlaces_Click" IsEnabled="False" Text="Import saved places…" />
             </MenuBarItem>
             <MenuBarItem Title="Help">
                 <MenuFlyoutItem Click="About_Click" Text="About Offline Maps" />

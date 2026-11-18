@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -35,6 +36,12 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     var satellitesUsed by mutableStateOf(0)
     var layers by mutableStateOf(true)
     var rendererGeneration by mutableStateOf(0)
+        private set
+    var rendererRetryRequired by mutableStateOf(false)
+        private set
+    var rendererRecovering by mutableStateOf(false)
+        private set
+    private var lastRendererStop: Long? = null
     var view: JSONObject? = null
     var page: WebMap? = null
     var core: CoreStore? = null
@@ -95,6 +102,26 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     fun moved(lat: Double, lon: Double, zoom: Double) {
         view = JSONObject().put("latitude", lat).put("longitude", lon).put("zoom", zoom)
         prefs.edit().putString("view", view.toString()).apply()
+    }
+    fun rendererStopped() {
+        page = null
+        val now = SystemClock.elapsedRealtime()
+        val repeated = lastRendererStop?.let { now - it < 30_000 } ?: false
+        lastRendererStop = now
+        if (repeated) {
+            rendererRecovering = false
+            rendererRetryRequired = true
+        } else {
+            retryRenderer()
+        }
+    }
+    fun retryRenderer() {
+        rendererRetryRequired = false
+        rendererRecovering = true
+        rendererGeneration++
+    }
+    fun rendererReady() {
+        rendererRecovering = false
     }
     fun initMessage(): JSONObject = JSONObject(status!!.toString()).apply {
         put("kind", "init"); put("theme", "dark"); put("animate", true); put("units", "imperial")

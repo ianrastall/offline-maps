@@ -47,7 +47,7 @@ public sealed partial class MainWindow
             picker.FileTypeChoices.Add("PNG image", [".png"]);
             if (await picker.PickSaveFileAsync() is { } file && !_closing)
             {
-                await Task.Run(() => WriteMapImage(file.Path, png));
+                await Task.Run(() => WriteExportFile(file.Path, png, overwrite: true));
                 if (!_closing)
                 {
                     StatusText.Text = $"Saved {Path.GetFileName(file.Path)}";
@@ -122,19 +122,19 @@ public sealed partial class MainWindow
         return png.ToArray();
     }
 
-    private static void WriteMapImage(string path, byte[] png)
+    private static void WriteExportFile(string path, byte[] data, bool overwrite)
     {
         // Write beside the destination so the final rename is on the same volume.
-        string temp = Path.Combine(Path.GetDirectoryName(path)!, $".offline-map-{Guid.NewGuid():N}.tmp");
+        string temp = Path.Combine(Path.GetDirectoryName(path)!, $".offline-maps-{Guid.NewGuid():N}.tmp");
         var file = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         try
         {
             using (file)
             {
-                file.Write(png);
+                file.Write(data);
                 file.Flush(flushToDisk: true);
             }
-            File.Move(temp, path, overwrite: true);
+            File.Move(temp, path, overwrite);
         }
         catch
         {
@@ -144,7 +144,7 @@ public sealed partial class MainWindow
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                AppLog.Write($"Map image temporary file could not be removed: {ex.Message}");
+                AppLog.Write($"Temporary export file could not be removed: {ex.Message}");
             }
             throw;
         }

@@ -60,6 +60,8 @@ message Request {
     GetOverviewTile get_overview_tile = 15;
     MoveStore move_store = 16;
     RemoveMovedSource remove_moved_source = 17;
+    ExportPlaces export_places = 18;
+    ImportPlaces import_places = 19;
   }
 }
 
@@ -150,6 +152,23 @@ message PrepareSearch {}
 // Moves an unreadable saved-places file aside so a new list can be started.
 message ResetPlaces {}
 
+message ExportPlaces {}
+
+message ImportPlaces {
+  string json = 1;
+  // False validates the backup and previews the merge without writing it.
+  bool apply = 2;
+}
+
+message PlacesBackup {
+  string json = 1;
+}
+
+message PlacesImportResult {
+  uint32 added = 1;
+  uint32 skipped = 2;
+}
+
 // Moves the installed maps and saved places to another folder (created if
 // missing). Only the store's own entries move; other files in either folder
 // are left alone. Runs like an update: one at a time, progress through
@@ -199,6 +218,8 @@ message Response {
     OverlayTile overlay_tile = 10;
     OverviewTile overview_tile = 11;
     MoveStoreResult move_store = 12;
+    PlacesBackup places_backup = 13;
+    PlacesImportResult places_import = 14;
   }
 }
 
