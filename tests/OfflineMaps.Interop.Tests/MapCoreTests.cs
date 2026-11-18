@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using Google.Protobuf;
 using OfflineMaps.Interop;
 using OfflineMaps.Interop.Messages;
@@ -130,6 +133,33 @@ public class MapCoreTests
         using var core = MapCore.Open(store.Path, packageUrl: "http://127.0.0.1:9/package.mbtiles");
         var error = Assert.Throws<MapCoreException>(() => core.Update(UpdateTarget.Map, "us-il"));
         Assert.Equal(ErrorKind.Network, error.Kind);
+        Assert.False(core.GetStatus().Updating);
+    }
+
+    [Fact]
+    public async Task CancellingAnUpdateCheckDiscardsTheDelayedResponse()
+    {
+        using var store = new TempStore();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        using var core = MapCore.Open(store.Path, packageUrl: $"http://127.0.0.1:{port}/map.mbtiles");
+
+        var checking = Task.Run(() => core.Update(UpdateTarget.Map, "us-il", checkOnly: true));
+        using var client = await listener.AcceptTcpClientAsync(timeout.Token);
+        using var stream = client.GetStream();
+        using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+        Assert.StartsWith("HEAD ", await reader.ReadLineAsync(timeout.Token));
+        while (await reader.ReadLineAsync(timeout.Token) is { Length: > 0 })
+        {
+        }
+
+        core.Cancel();
+        Assert.True(core.Progress().Cancelling);
+        await stream.WriteAsync("HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n"u8.ToArray(), timeout.Token);
+        var error = await Assert.ThrowsAsync<MapCoreException>(() => checking.WaitAsync(timeout.Token));
+        Assert.Equal(ErrorKind.Cancelled, error.Kind);
         Assert.False(core.GetStatus().Updating);
     }
 

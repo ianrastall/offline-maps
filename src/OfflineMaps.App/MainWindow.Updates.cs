@@ -17,6 +17,7 @@ public sealed partial class MainWindow
 
     private readonly List<Job> _queue = [];
     private Task? _update;
+    private CancellationTokenSource? _checkingUpdates;
     private Job? _current;
     private IReadOnlyList<CatalogRegion> _catalog = [];
     private RegionsWindow? _regionsWindow;
@@ -34,7 +35,8 @@ public sealed partial class MainWindow
 
     internal bool IsQueued(string regionId, UpdateTarget target) => _queue.Contains(new Job(regionId, target));
 
-    internal bool IsBusy => _update is not null;
+    internal bool IsBusy => _update is not null || _openingMapFolder;
+    internal bool IsCheckingUpdates => _checkingUpdates is not null;
 
     internal string RegionName(string id) => _catalog.FirstOrDefault(r => r.Id == id)?.Name ?? id;
 
@@ -50,6 +52,10 @@ public sealed partial class MainWindow
     /// <summary>Opens the Regions window, on <paramref name="regionId"/> when given.</summary>
     internal void OpenRegions(string? regionId = null)
     {
+        if (_core is null)
+        {
+            return;
+        }
         if (_regionsWindow is null)
         {
             _regionsWindow = new RegionsWindow(this, regionId);
@@ -65,6 +71,10 @@ public sealed partial class MainWindow
     /// <summary>Adds a download or update to the queue and starts the queue if it is idle.</summary>
     internal void Enqueue(string regionId, UpdateTarget target)
     {
+        if (_openingMapFolder || _closing || IsCheckingUpdates)
+        {
+            return;
+        }
         var job = new Job(regionId, target);
         if (_current == job || _queue.Contains(job))
         {
@@ -113,48 +123,71 @@ public sealed partial class MainWindow
     /// </summary>
     internal async Task<List<Job>?> CheckForUpdatesAsync(IReadOnlyList<RegionStatus> regions)
     {
-        if (_core is not { } core || _update is not null)
+        if (_core is not { } core || IsBusy || _closing)
         {
             return null;
         }
         var jobs = regions.SelectMany(r => InstalledTargets(r).Select(t => new Job(r.Id, t))).ToList();
         var newer = new List<Job>();
+        var unavailable = new Dictionary<string, string>();
+        using var cancellation = new CancellationTokenSource();
+        _checkingUpdates = cancellation;
+        ErrorBar.IsOpen = false;
         UpdateAllItem.IsEnabled = false;
+        UpdateBar.Title = "Checking for updates";
+        UpdateBar.Message = "Checking installed maps and layers";
+        UpdateProgress.IsIndeterminate = true;
+        CancelButton.Content = "Cancel check";
+        CancelButton.IsEnabled = true;
+        CancelUpdateItem.Text = "Cancel update check";
+        CancelUpdateItem.IsEnabled = true;
+        UpdateBar.IsOpen = true;
         ProgressText = "Checking for a newer version";
         try
         {
-            foreach (var job in jobs)
+            _update = CheckJobsAsync();
+            await _update;
+            if (_closing)
             {
-                _current = job;
-                StatusText.Text = $"Checking for updates: {Subject(job)}";
-                RegionsChanged?.Invoke();
-                var work = Task.Run(() => core.Update(job.Target, job.RegionId, checkOnly: true));
-                _update = work;
-                var result = await work;
-                _checks[job] = new Check(result.Available, result.RemoteDate, result.RemoteBytes);
-                if (result.Available)
-                {
-                    newer.Add(job);
-                }
+                return null;
             }
             foreach (var region in regions)
             {
-                _checkedAt[region.Id] = DateTime.Now;
+                if (!unavailable.ContainsKey(region.Id))
+                {
+                    _checkedAt[region.Id] = DateTime.Now;
+                }
             }
         }
-        catch (MapCoreException ex)
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            AppLog.Write($"Checking for updates failed: {ex.Kind} {ex.Message}");
-            ShowError("Updates could not be checked", ex.Message);
+            if (!_closing)
+            {
+                StatusText.Text = "Update check canceled";
+            }
             return null;
         }
         finally
         {
+            _checkingUpdates = null;
             _update = null;
             _current = null;
             ProgressText = "";
-            UpdateAllItem.IsEnabled = _status?.Coverage is not null;
-            RegionsChanged?.Invoke();
+            if (!_allowClose)
+            {
+                UpdateAllItem.IsEnabled = _status?.Coverage is not null;
+                UpdateBar.IsOpen = false;
+                CancelUpdateItem.IsEnabled = false;
+                CancelUpdateItem.Text = "Cancel download";
+                RegionsChanged?.Invoke();
+            }
+        }
+        if (unavailable.Count > 0)
+        {
+            StatusText.Text = "Some updates could not be checked";
+            ShowError("Updates could not be checked for some regions",
+                $"Could not finish checking {Format.List(unavailable.Keys.Select(RegionName))}. {unavailable.Values.First()}");
+            return newer.Count > 0 ? newer : null;
         }
         StatusText.Text = newer.Count switch
         {
@@ -163,6 +196,38 @@ public sealed partial class MainWindow
             int n => $"{n} updates available",
         };
         return newer;
+
+        async Task CheckJobsAsync()
+        {
+            // Register the batch as the active task before it can update either window.
+            await Task.Yield();
+            foreach (var job in jobs)
+            {
+                cancellation.Token.ThrowIfCancellationRequested();
+                _current = job;
+                UpdateBar.Message = $"Checking {Subject(job)}";
+                StatusText.Text = $"Checking for updates: {Subject(job)}";
+                _checkedAt.Remove(job.RegionId);
+                RegionsChanged?.Invoke();
+                try
+                {
+                    var result = await Task.Run(() => core.Update(job.Target, job.RegionId, checkOnly: true), cancellation.Token);
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    _checks[job] = new Check(result.Available, result.RemoteDate, result.RemoteBytes);
+                    if (result.Available)
+                    {
+                        newer.Add(job);
+                    }
+                }
+                catch (MapCoreException ex)
+                {
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    _checks.Remove(job);
+                    unavailable.TryAdd(job.RegionId, ex.Message);
+                    AppLog.Write($"Checking {Subject(job)} failed: {ex.Kind} {ex.Message}");
+                }
+            }
+        }
     }
 
     /// <summary>"Illinois map", "Illinois stations and addresses" and so on, for lists.</summary>
@@ -367,10 +432,18 @@ public sealed partial class MainWindow
         if (_update is not null)
         {
             _queue.Clear();
+            _checkingUpdates?.Cancel();
             _core?.Cancel();
             CancelButton.IsEnabled = false;
             CancelUpdateItem.IsEnabled = false;
-            ShowProgress();
+            if (_checkingUpdates is not null)
+            {
+                UpdateBar.Message = "Waiting for the current check to stop";
+            }
+            else
+            {
+                ShowProgress();
+            }
         }
     }
 
@@ -402,13 +475,13 @@ public sealed partial class MainWindow
     /// <summary>Runs queued jobs until the queue is empty.</summary>
     private async Task RunQueueAsync()
     {
-        if (_core is null || _update is not null || _queue.Count == 0)
+        if (_core is null || IsBusy || _closing || _queue.Count == 0)
         {
             return;
         }
         var messages = new List<string>();
         bool cancelled = false;
-        while (_queue.Count > 0 && _core is { } core)
+        while (!_closing && _queue.Count > 0 && _core is { } core)
         {
             var job = _queue[0];
             _queue.RemoveAt(0);

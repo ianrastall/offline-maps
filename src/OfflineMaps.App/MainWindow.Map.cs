@@ -177,7 +177,7 @@ public sealed partial class MainWindow
         var deferral = e.GetDeferral();
         try
         {
-            var core = _core;
+            var core = overview ? _core ?? _overviewCore : _core;
             byte[] body;
             string type;
             int status = 200;
@@ -325,7 +325,10 @@ public sealed partial class MainWindow
                     SelectPlace(message.GetProperty("id").GetUInt64());
                     break;
                 case "region":
-                    ShowRegionMenu(message.GetProperty("id").GetString() ?? "", Number("x"), Number("y"));
+                    if (_core is not null)
+                    {
+                        ShowRegionMenu(message.GetProperty("id").GetString() ?? "", Number("x"), Number("y"));
+                    }
                     break;
                 case "key":
                     HandleMapKey(message.GetProperty("key").GetString() ?? "");

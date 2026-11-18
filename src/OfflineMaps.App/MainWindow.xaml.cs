@@ -82,33 +82,7 @@ public sealed partial class MainWindow : Window
         }
         Place();
         _placed = true;
-        try
-        {
-            _core = await Task.Run(() => MapCore.Open(AppPaths.StoreDir, AppPaths.PackageUrl, AppPaths.ExtrasUrl, AppPaths.OverlaysUrl, AppPaths.OverviewPath, AppPaths.BundlesUrl));
-        }
-        catch (MapCoreException ex)
-        {
-            AppLog.Write($"The map core could not start: {ex.Message}");
-            MapMessage.Text = $"Offline Maps could not open its map folder ({AppPaths.StoreDir}). {ex.Message}";
-            StatusText.Text = "Not started";
-            return;
-        }
-        try
-        {
-            var opened = _core;
-            _catalog = await Task.Run(opened.Catalog);
-        }
-        catch (MapCoreException ex)
-        {
-            AppLog.Write($"The region list could not be read: {ex.Message}");
-        }
-        await RefreshStatusAsync();
-        ShowPlaces();
-        await StartMapViewAsync();
-        if (_status is { SearchReady: false } && _status.Regions.Any(r => r.Map is not null))
-        {
-            await PrepareSearchAsync();
-        }
+        await OpenConfiguredFolderAsync();
     }
 
     /// <summary>First run: 1200 × 800, centred; later runs restore the last valid placement.</summary>
@@ -164,26 +138,37 @@ public sealed partial class MainWindow : Window
     /// <summary>Reads the store's state and brings the window's messages, menus and status up to date.</summary>
     private async Task RefreshStatusAsync()
     {
-        if (_core is null)
+        var core = _core;
+        if (core is null && _overviewCore is null)
         {
             return;
         }
+        Status status;
         try
         {
-            var core = _core;
-            _status = await Task.Run(core.GetStatus);
+            status = core is null ? new Status { ContentVersion = "overview-only" } : await Task.Run(core.GetStatus);
         }
         catch (MapCoreException ex)
         {
-            ShowError("The map state could not be read", ex.Message);
+            if (!_closing && ReferenceEquals(_core, core))
+            {
+                ShowError("The map state could not be read", ex.Message);
+            }
             return;
         }
-        var status = _status;
+        if (_closing || !ReferenceEquals(_core, core))
+        {
+            return;
+        }
+        _status = status;
+        bool connected = core is not null;
+        RegionsItem.IsEnabled = connected;
+        SearchBox.IsEnabled = connected;
         bool hasMap = status.Coverage is not null;
         bool busy = _update is not null;
         var missingExtras = status.Regions.Where(r => r.Map is not null && r.Extras is null).Select(r => r.Name).ToList();
         var oldExtras = status.Regions.Where(r => r.Extras is { Outdoor: false }).Select(r => r.Name).ToList();
-        NoMapBar.IsOpen = !hasMap && !busy && _queue.Count == 0;
+        NoMapBar.IsOpen = connected && !hasMap && !busy && _queue.Count == 0;
         if (missingExtras.Count > 0)
         {
             ExtrasBar.IsOpen = !busy && !_settings.ExtrasOfferClosed;
@@ -235,7 +220,7 @@ public sealed partial class MainWindow : Window
         }
         if (!busy)
         {
-            StatusText.Text = Summary(status);
+            StatusText.Text = connected ? Summary(status) : "World overview · map folder unavailable";
         }
         UpdatePlaceCommands();
         SyncMap();
@@ -281,6 +266,7 @@ public sealed partial class MainWindow : Window
     {
         ErrorBar.Title = title;
         ErrorBar.Message = message;
+        ErrorBar.IsClosable = true;
         if (action is not null && onAction is not null)
         {
             var button = new Button { Content = action };
@@ -544,10 +530,12 @@ public sealed partial class MainWindow : Window
         {
             if (_update is { } update)
             {
+                bool checking = _checkingUpdates is not null;
                 var answer = await ShowDialogAsync(new ContentDialog
                 {
-                    Title = _movingFrom is null ? "Stop the download and close?" : "Stop moving the maps and close?",
-                    Content = Text(_movingFrom is null
+                    Title = checking ? "Stop checking for updates and close?"
+                        : _movingFrom is null ? "Stop the download and close?" : "Stop moving the maps and close?",
+                    Content = Text(checking ? "The remaining checks will be canceled." : _movingFrom is null
                         ? "What has been downloaded is kept, and the download continues from there next time."
                         : $"The maps stay in {_movingFrom}, and what was copied so far is removed."),
                     PrimaryButtonText = "Stop and close",
@@ -560,6 +548,7 @@ public sealed partial class MainWindow : Window
                     UpdateMapImageCommand();
                     return;
                 }
+                _checkingUpdates?.Cancel();
                 _core?.Cancel();
                 try
                 {
@@ -576,6 +565,8 @@ public sealed partial class MainWindow : Window
             MapView.Close();
             _core?.Dispose();
             _core = null;
+            _overviewCore?.Dispose();
+            _overviewCore = null;
         }
         catch (Exception ex)
         {

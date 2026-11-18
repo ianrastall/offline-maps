@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "offline-maps-android"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "jni",
  "offline-maps-ffi",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "offline-maps-core"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "flate2",
  "fs4",
@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "offline-maps-dev"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "offline-maps-core",
  "serde_json",
@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "offline-maps-ffi"
-version = "0.20.0"
+version = "0.20.1"
 dependencies = [
  "flate2",
  "offline-maps-core",

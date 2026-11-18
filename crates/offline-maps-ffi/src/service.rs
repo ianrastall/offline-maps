@@ -1271,8 +1271,11 @@ impl Service {
                     ..Default::default()
                 },
             }),
+        };
+        if request.check_only && self.cancel.load(Ordering::Acquire) {
+            return Err(error(ErrorKind::Cancelled, "Update check canceled."));
         }
-        .map_err(update_error)?;
+        let result = result.map_err(update_error)?;
         if !result.up_to_date && !result.available {
             // Close the replaced files, then remove them.
             self.reload();

@@ -67,7 +67,7 @@
                 </MenuFlyoutItem>
             </MenuBarItem>
             <MenuBarItem Title="Map">
-                <MenuFlyoutItem Click="Regions_Click" Text="Regions…" />
+                <MenuFlyoutItem x:Name="RegionsItem" Click="Regions_Click" IsEnabled="False" Text="Regions…" />
                 <MenuFlyoutItem x:Name="UpdateAllItem" Click="CheckUpdates_Click" Text="Check for updates…" />
                 <MenuFlyoutItem x:Name="CancelUpdateItem" Click="CancelUpdate_Click" IsEnabled="False" Text="Cancel download" />
                 <MenuFlyoutSeparator />
@@ -185,6 +185,7 @@
                     x:Name="SearchBox"
                     Grid.Row="1"
                     AutomationProperties.Name="Search places, streets, addresses and stations"
+                    IsEnabled="False"
                     PlaceholderText="Town, street, address, fuel"
                     QueryIcon="Find"
                     QuerySubmitted="SearchBox_QuerySubmitted"
