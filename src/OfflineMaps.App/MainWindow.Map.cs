@@ -177,7 +177,7 @@ public sealed partial class MainWindow
         var deferral = e.GetDeferral();
         try
         {
-            var core = overview ? _core ?? _overviewCore : _core;
+            var core = overview || stations ? _core ?? _overviewCore : _core;
             byte[] body;
             string type;
             int status = 200;
