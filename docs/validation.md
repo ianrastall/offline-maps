@@ -341,6 +341,16 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.20.2: Keyboard access
+
+**F6** and **View > Focus map** move keyboard focus to the map canvas, which now shows a visible outline. **Ctrl+F** returns focus to search. The app raises polite Windows UI Automation events after a submitted search, a map-image or saved-place export, and a saved-place import. It invalidates outstanding search results as soon as the query changes.
+
+Using the release build and a disposable Illinois store, **Ctrl+F** focused search, **Enter** selected Springfield, and **F6** returned focus to the outlined map with the result still selected. The right arrow panned the map. Formatting, Clippy with warnings denied, 120 Rust tests, 13 Windows interop tests and the GPS marker regression passed.
+
+The installer upgraded 0.20.1 in place. Settings, saved places and active map records matched all 69 hashes. The normal app launched from its Start Menu entry. The revised acceptance script passed against the installed app with a fresh overview store and with a copied Illinois store. It drew a sample marker and attribution without external page requests and preserved the fixture's saved-place file. The check ran with desktop networking available. Clean Windows installation, Narrator speech, contrast themes and mixed-DPI acceptance remain open.
+
+Published 18 November 2026 as [v0.20.2](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.2) from `b82c8879f2faa276983670903f0a128e12882d12`. The 323,563,142-byte installer has SHA-256 `27fe9d56ff13ce2e714aa151cbd4d42879329032d10c192bad0d7dfc71d18c9d`, matching the public release asset.
+
 ## 0.20.1: Map folder recovery
 
 Windows keeps the configured folder if it is unavailable at startup. The built-in world overview opens and **Retry map folder** can reopen the store after the drive returns. Choosing a replacement folder saves the selection after the app opens it successfully.

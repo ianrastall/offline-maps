@@ -6,7 +6,7 @@ Download detailed road maps for Windows or Android and use them without an inter
 
 | Platform | Download | First map |
 | --- | --- | --- |
-| Windows 11 24H2 or later, x64 | [Windows 0.20.1](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.1) | Run `OfflineMaps-0.20.1-win-x64-setup.exe`, then open **Offline Maps** from Start. Choose **Map > Regions…**, select a region and click **Download map**. |
+| Windows 11 24H2 or later, x64 | [Windows 0.20.2](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.2) | Run `OfflineMaps-0.20.2-win-x64-setup.exe`, then open **Offline Maps** from Start. Choose **Map > Regions…**, select a region and click **Download map**. |
 | Android 10 or later, arm64 or x86-64 | [Android 0.6.0 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.6.0) | Open `OfflineMaps-android-0.6.0-release.apk` on the device and follow the install prompts. Open **Maps > Download maps**, then select and download a region. Wi-Fi only is on by default. |
 
 Download the areas you’ll need while you’re connected. Wait until each region is ready, then disconnect and check that you can zoom to street level and find a place you expect to use. You can also copy a region from Windows to Android over USB. [User and developer guide](GUIDE.md#using-offline-maps)

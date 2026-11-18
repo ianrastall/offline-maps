@@ -15,6 +15,8 @@ Installed maps have no expiration date. When you’re online, use **Map > Check 
 
 On Windows, if the drive holding your map folder is unavailable at startup, the app opens the built-in world overview. Reconnect the drive and choose **Retry map folder** to reopen the detailed maps and saved places. Use **Cancel check** if you want to stop checking for updates.
 
+Press **F6** or choose **View > Focus map** to put keyboard focus on the map. The outline shows where focus is. Use the arrow keys to pan, plus and minus to zoom, and **Ctrl+F** to return to search. Press **Enter** in search to select the first result.
+
 Android downloads can continue while the screen is off or another app is open. Enable notifications for progress and **Pause** outside the app. If the selected connection drops or the transfer is interrupted, reopen **Maps > Download maps** and use **Resume**.
 
 GPS is available in the foreground on Android devices with satellite location hardware. Enable it in the app, grant precise location and wait for a fresh fix. Touching the map pauses following. **Follow** recenters on your position. Warm offline fixes were verified on a physical phone. Cold acquisition after a prolonged offline period and extended battery behavior remain unverified. [Android verification](docs/android-app.md)
@@ -119,10 +121,12 @@ Use separate Windows `--settings DIR` and `--store DIR` paths to test without wr
 
 Keep downloaded datasets under `data/`. Keep private place backups and generated build or test artifacts out of Git. For changes to downloads, verify cancellation and resume with an existing working map. For changes to activation, check that a failed update leaves installed data usable. Use the [offline acceptance procedure](docs/validation.md#offline-acceptance-test) to check real rendering and search with the network disconnected.
 
+For a smoke test of the installed Windows app, close the app and run `powershell -NoProfile -File tools/acceptance/offline-check.ps1 -RendererOnly` from the repository root with Node.js 24 available. Add `-Fixture <map-store>` to exercise local Illinois map data. The script copies only the active Illinois files and uses a new settings profile and a sample saved place. It prints the folder containing its map image and report.
+
 ### Further reading
 
 - [Data providers, formats and storage contract](docs/sources-and-architecture.md)
-- [Windows release and validation history](docs/validation.md#0201-map-folder-recovery)
+- [Windows release and validation history](docs/validation.md#0202-keyboard-access)
 - [Android release and device verification history](docs/android-app.md)
 - [North America and Android project plan](docs/north-america-and-android.md) and [worldwide expansion plan](docs/worldwide.md)
 - [Project brief](docs/project-brief.md), [Windows 0.19.0 handoff](docs/desktop-handoff.md) and [renderer decisions for Windows](docs/renderer-proof.md) and [Android](docs/android-renderer-proof.md)

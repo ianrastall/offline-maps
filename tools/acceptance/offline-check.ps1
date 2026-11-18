@@ -96,14 +96,17 @@ try {
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousArguments
 }
 
-# Wait for a live local document before attaching either diagnostic client.
+# Wait for the local document and the renderer worker. The initial target can
+# advertise the navigation URL while its JavaScript context is still blank.
 $ready = $false
 for ($i = 0; $i -lt 60 -and -not $ready; $i++) {
     $proc.Refresh()
     if ($proc.HasExited) { throw "Offline Maps exited before opening the test window (exit $($proc.ExitCode))." }
     try {
         $pages = Invoke-RestMethod "http://127.0.0.1:$port/json" -TimeoutSec 1
-        $ready = [bool]($pages | Where-Object { $_.type -eq 'page' -and $_.url -eq 'https://map.local/index.html' })
+        $document = $pages | Where-Object { $_.type -eq 'page' -and $_.url -eq 'https://map.local/index.html' }
+        $worker = $pages | Where-Object { $_.type -eq 'worker' -and $_.url -like 'https://map.local/maplibre/*' }
+        $ready = [bool]($document -and $worker)
     } catch {}
     if (-not $ready) { Start-Sleep -Seconds 1 }
 }

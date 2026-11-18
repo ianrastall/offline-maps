@@ -14,7 +14,7 @@ The app imports Jupiter.UI (`build/Jupiter.UI.targets`): shared resources, the a
    - A folder mapping is not used, because requests to a mapped host bypass the handler. Every other origin is refused with 403, navigation away from `map.local` is cancelled, permissions are denied, and the page has a same-origin Content Security Policy.
    - There is no TCP listener.
    - The Rust core remains the authority for packages, validation, search and saved places. The web view only renders and reports map interactions (view changes, context menu, clicked saved places, shortcuts).
-2. **Keyboard shortcuts from the map (8 November 2026).** While the map has focus, WebView2 does not pass keys to the window's menu accelerators, so the page forwards the app's shortcuts (Ctrl+F, Ctrl+,, Ctrl+B, Ctrl+D, Ctrl+Shift+C, Ctrl+Shift+S, Ctrl+0, F11) to the shell. Browser accelerator keys are disabled.
+2. **Keyboard shortcuts from the map (8 November 2026).** While the map has focus, WebView2 does not pass keys to the window's menu accelerators, so the page forwards the app's shortcuts (Ctrl+F, Ctrl+,, Ctrl+B, Ctrl+D, Ctrl+Shift+C, Ctrl+Shift+S, Ctrl+0, F11) to the shell. Browser accelerator keys are disabled. F6 moves focus to the map canvas from the Windows shell or its embedded page. The canvas shows an outline when it has keyboard focus.
 3. **Status bar truncation (8 November 2026).** Long status text (map and extras dates) is trimmed with an ellipsis at narrow window widths, as in Mix2DO. The same facts are in Map > Map information.
 
 ## Android edition
