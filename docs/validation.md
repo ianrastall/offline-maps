@@ -351,6 +351,14 @@ The installer upgraded 0.19.0 in place and the installed build launched from the
 
 Published 18 November 2026 as [v0.20.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.0) from `7d89d3a565e4cebb9b786927e719ae14582842a5`. The 323,546,226-byte installer has SHA-256 `a8c73a0ffea479156b1527f15dca79f41ade35f14472009c25c7e7e4c50a2c97`, matching the public release asset. Windows remains the latest release.
 
+### Windows diagnostics, 18 November 2026
+
+The installed 0.20.0 interop assembly and native library opened an isolated copy of Illinois. The engine served detailed map, overview, terrain and overlay tiles and found Springfield, a Chicago street address and fuel stations. A refused loopback update check returned a network error. The current map and search remained usable. The desktop network stayed connected throughout. Formatting, Clippy, 120 Rust tests, 12 interop tests and the GPS marker regression passed. The installed Start Menu target, uninstaller registration and public installer digest matched 0.20.0. The regular app stayed open and 54 hashes for its settings, saved places and active map records matched before and after the diagnostic run.
+
+1. **Recover when the map drive is unavailable.** The installed core returned a storage error when the configured folder could not be opened. A fresh accessible store served the bundled overview. The Windows startup handler returns before starting the map view on the storage error. Keep the configured path, show the overview while the drive is unavailable, and let the user retry after reconnecting it. Validate a replacement folder before saving it as the default.
+2. **Make update checks cancellable.** A delayed loopback server held an update check open. The installed core acknowledged cancellation in its progress state, then returned an available update when the reply arrived. Stop the remaining checks when canceled and distinguish regions that could not be checked from regions that are up to date.
+3. **Verify the next installer on a clean Windows 11 system.** Exercise keyboard-only startup recovery and saved-place actions, screen-reader announcements, high contrast and mixed DPI. The existing offline acceptance script assumes the default map folder for its saved-place check and restores the live settings file. Update it to use isolated paths before relying on it for acceptance.
+
 ## 0.19.0: Map images and renderer recovery
 
 - **Save map image.** File > Save map image… and Ctrl+Shift+S wait for the visible map to finish drawing, capture it, then open the Windows PNG picker. The image includes the map's visible layers, markers, scale and attributions. The app writes the complete PNG beside the destination before renaming it into place.
