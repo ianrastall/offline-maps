@@ -13,6 +13,8 @@ You can install regions independently. The catalog includes U.S. states and terr
 
 Installed maps have no expiration date. When you’re online, use **Map > Check for updates…** on Windows to see what’s newer before choosing a download. On Android, open an installed region from **Maps** and tap **Update** for the data you want to refresh. The current map stays available until its replacement passes verification.
 
+On Windows, if the drive holding your map folder is unavailable at startup, the app opens the built-in world overview. Reconnect the drive and choose **Retry map folder** to reopen the detailed maps and saved places. Use **Cancel check** if you want to stop checking for updates.
+
 Android downloads can continue while the screen is off or another app is open. Enable notifications for progress and **Pause** outside the app. If the selected connection drops or the transfer is interrupted, reopen **Maps > Download maps** and use **Resume**.
 
 GPS is available in the foreground on Android devices with satellite location hardware. Enable it in the app, grant precise location and wait for a fresh fix. Touching the map pauses following. **Follow** recenters on your position. Warm offline fixes were verified on a physical phone. Cold acquisition after a prolonged offline period and extended battery behavior remain unverified. [Android verification](docs/android-app.md)
@@ -120,7 +122,7 @@ Keep downloaded datasets under `data/`. Keep private place backups and generated
 ### Further reading
 
 - [Data providers, formats and storage contract](docs/sources-and-architecture.md)
-- [Windows release and validation history](docs/validation.md#0200-saved-place-backups)
+- [Windows release and validation history](docs/validation.md#0201-map-folder-recovery)
 - [Android release and device verification history](docs/android-app.md)
 - [North America and Android project plan](docs/north-america-and-android.md) and [worldwide expansion plan](docs/worldwide.md)
 - [Project brief](docs/project-brief.md), [Windows 0.19.0 handoff](docs/desktop-handoff.md) and [renderer decisions for Windows](docs/renderer-proof.md) and [Android](docs/android-renderer-proof.md)

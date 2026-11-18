@@ -341,6 +341,18 @@ Completed 9 November 2026. The labels with missing letters were public-land name
 
 Verified: at zoom 12 over Evanston, "Lighthouse Landing", "Leahy Park", "Maple Park", "Philbrick Park" and "Lunt Park" draw whole where 0.7.0 cut them, in the development build and in the installed 0.7.1 started from Start. Released as [v0.7.1](https://github.com/ianrastall/offline-north-american-maps/releases/tag/v0.7.1), built from 8748bff; the installer's SHA-256 (06906734…e6d0581) matches GitHub's digest, and Settings > Apps lists 0.7.1.
 
+## 0.20.1: Map folder recovery
+
+Windows keeps the configured folder if it is unavailable at startup. The built-in world overview opens and **Retry map folder** can reopen the store after the drive returns. Choosing a replacement folder saves the selection after the app opens it successfully.
+
+The Windows update check now owns a single batch with a **Cancel check** command. Cancellation prevents subsequent requests and discards the current response if it arrives after cancellation. A failure checking an individual region is reported separately from available updates. The in-flight network request can take time to return.
+
+Formatting, Clippy with warnings denied, 120 Rust tests, 13 interop tests and the shared GPS marker check passed. The new interop regression delays a loopback response until after cancel is requested and verifies the core returns a cancellation. The installed WinUI app opened its overview using an isolated, unavailable map path, offered **Retry map folder** and switched to a working map folder through Settings. The final overview served the map without external page requests or a renderer exception. The simulated missing folder test kept desktop networking connected. End-to-end keyboard, screen-reader, mixed-DPI and clean-machine tests remain open.
+
+The installer upgraded 0.20.0 and preserved 68 hashes covering settings, saved places and active map and layer records. The regular app launched from the **Offline Maps** Start Menu entry.
+
+Published 18 November 2026 as [v0.20.1](https://github.com/ianrastall/offline-maps/releases/tag/v0.20.1) from `34a69ca858da31824f368764dac8a87336139d74`. The 323,566,162-byte installer has SHA-256 `e3742c82661c150e0de2410056e90da2ed5fad5e9200fae6b3b33d1e47926cb9`, matching the public release asset.
+
 ## 0.20.0: Saved-place backups
 
 **Places > Export saved places…** writes a portable JSON backup to a new file. **Places > Import saved places…** validates the entire file and previews new places and exact duplicates. Confirming adds the new places in one write, preserving the existing entries. Windows and Android use the same backup format.
