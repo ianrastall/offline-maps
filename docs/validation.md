@@ -1,5 +1,13 @@
 # Implementation and validation
 
+## Windows 0.21.0 map library export
+
+**Map > Export maps for Android…** makes one library folder from any selection of installed regions with ready search. Each map, index and optional layer is copied into a temporary folder and verified through the same native checks used on Android. The finished library appears under a new name on success. Cancellation removes the unfinished staging folder, and existing libraries stay available.
+
+Verified using the installed 0.21.0 on 19 November 2026. In an isolated map store, an attempted download confirmed the test app's network requests were blocked. The Windows export selected Delaware and D.C. through the desktop dialog and wrote two verified transfer manifests to a new folder. All 20 source files kept their SHA-256. A fresh Android 0.10.0 install restored both maps and their optional layers in airplane mode, then opened Dover and McPherson Square using offline search. The Windows installer updated the local app, and the **Offline Maps** shortcut in Start launched 0.21.0. Formatting, Clippy, 123 Rust tests and 13 interop tests passed.
+
+Published from `631c05a7478b078f8a4276936b99f0c756211956`. The 323,604,628-byte installer matches the public asset's SHA-256 `d6330ad0e445d4776ae270d58f4a2f07d25d1c01bed6fdb8a35e8d28167d226a`. [Windows 0.21.0 release](https://github.com/ianrastall/offline-maps/releases/tag/v0.21.0)
+
 ## Stage 1: project and core foundations
 
 Implemented: Illinois source references, attribution constants, finite/range-checked coordinates, package readiness states and bounded streaming to caller-owned staging storage. Unit tests cover multibuffer transfers, unknown lengths, truncation, empty bodies, size limits, cancellation, write failures and readiness.
