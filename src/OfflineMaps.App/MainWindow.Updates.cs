@@ -71,7 +71,7 @@ public sealed partial class MainWindow
     /// <summary>Adds a download or update to the queue and starts the queue if it is idle.</summary>
     internal void Enqueue(string regionId, UpdateTarget target)
     {
-        if (_openingMapFolder || _closing || IsCheckingUpdates)
+        if (_openingMapFolder || _closing || IsCheckingUpdates || IsExportingLibrary)
         {
             return;
         }

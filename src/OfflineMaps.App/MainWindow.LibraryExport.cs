@@ -9,7 +9,7 @@ namespace OfflineMaps.App;
 public sealed partial class MainWindow
 {
     private bool _choosingLibrary;
-    private bool _exportingLibrary;
+    internal bool IsExportingLibrary { get; private set; }
 
     private bool CanExportLibrary => !_closing && !_choosingLibrary && !IsBusy && _core is not null &&
         _status is { } status && status.Regions.Any(region => region.Map is not null && region.SearchReady);
@@ -81,7 +81,7 @@ public sealed partial class MainWindow
     private async Task ExportLibraryAsync(string[] ids, string destination)
     {
         var core = _core!;
-        _exportingLibrary = true;
+        IsExportingLibrary = true;
         CancelUpdateItem.Text = "Cancel export";
         string? path;
         try
@@ -91,7 +91,7 @@ public sealed partial class MainWindow
         }
         finally
         {
-            _exportingLibrary = false;
+            IsExportingLibrary = false;
             CancelUpdateItem.Text = "Cancel download";
         }
         if (_closing)

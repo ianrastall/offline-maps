@@ -549,9 +549,9 @@ public sealed partial class MainWindow : Window
                 var answer = await ShowDialogAsync(new ContentDialog
                 {
                     Title = checking ? "Stop checking for updates and close?"
-                        : _exportingLibrary ? "Stop exporting maps and close?"
+                        : IsExportingLibrary ? "Stop exporting maps and close?"
                         : _movingFrom is null ? "Stop the download and close?" : "Stop moving the maps and close?",
-                    Content = Text(checking ? "The remaining checks will be canceled." : _exportingLibrary
+                    Content = Text(checking ? "The remaining checks will be canceled." : IsExportingLibrary
                         ? "The unfinished library will be removed." : _movingFrom is null
                         ? "What has been downloaded is kept, and the download continues from there next time."
                         : $"The maps stay in {_movingFrom}, and what was copied so far is removed."),
