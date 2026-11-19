@@ -11,6 +11,8 @@
 
 You can install regions independently. The catalog includes U.S. states and territories, Canadian provinces and territories, Mexico as a whole or by state, and regions across Europe, Asia, Africa, the Americas and Oceania. Antarctica is available in the world overview.
 
+On Android, you can also start with prepared Delaware and District of Columbia maps. Unzip the starter library, open **Maps > Restore map library** and select the extracted **Starter map library** folder. Once the archive is unpacked, maps and search can be imported offline. [Starter library ZIP](https://github.com/ianrastall/offline-maps/releases/download/android-v0.9.0/OfflineMaps-Starter-Delaware-DC.zip)
+
 Installed maps have no expiration date. When you’re online, use **Map > Check for updates…** on Windows to see what’s newer before choosing a download. On Android, open an installed region from **Maps** and tap **Update** for the data you want to refresh. The current map stays available until its replacement passes verification.
 
 On Windows, if the drive holding your map folder is unavailable at startup, the app opens the built-in world overview. Reconnect the drive and choose **Retry map folder** to reopen the detailed maps and saved places. Use **Cancel check** if you want to stop checking for updates.
@@ -23,14 +25,18 @@ Android downloads can continue while the screen is off or another app is open. E
 
 GPS is available in the foreground on Android devices with satellite location hardware. Enable it in the app, grant precise location and wait for a fresh fix. Touching the map pauses following. **Follow** recenters on your position. Warm offline fixes were verified on a physical phone. Cold acquisition after a prolonged offline period and extended battery behavior remain unverified. [Android verification](docs/android-app.md)
 
-### Keep and back up saved places
+### Keep and back up maps and saved places
 
 | Platform | Where to find your data |
 | --- | --- |
 | Windows | **Places > Export saved places…** writes a JSON backup to a new file. **Places > Import saved places…** previews the merge. **File > Settings > Map folder** shows where the app keeps installed maps and its active `saved-places.json`. The default is `%LOCALAPPDATA%\Jupiter\OfflineMaps\Maps`. Settings, logs and the WebView2 profile live in `%LOCALAPPDATA%\Jupiter\OfflineMaps`. |
-| Android | The app keeps maps and places in private storage. Use **Saved > Export** to write a JSON backup to a folder you choose. **Saved > Import** shows the new and duplicate counts before merging. |
+| Android | **Maps > Back up maps and places** copies installed maps and saved places to a folder you choose. **Maps > Restore map library** imports from that folder. To back up places on their own, use **Saved > Export** and restore with **Saved > Import**. |
 
-On Windows, **Map > Map information** shows installed data and source details. To free space in **Map > Regions…**, select the region and use **Remove…**. Use **File > Settings > Map folder > Change…** to switch drives or move the app’s maps and saved places. Windows upgrades and uninstalls preserve maps, places and settings. On Android, install a newer signed release over the existing app to retain its data. Export your saved places before clearing app storage or uninstalling Android.
+On Windows, **Map > Map information** shows installed data and source details. To free space in **Map > Regions…**, select the region and use **Remove…**. Use **File > Settings > Map folder > Change…** to switch drives or move the app’s maps and saved places. Windows upgrades and uninstalls preserve maps, places and settings.
+
+On Android, install a newer signed APK over the existing app to keep its active maps and places. Before uninstalling or clearing app storage, use **Maps > Back up maps and places**, choose a folder in Documents or on an SD card, and wait for the backup confirmation. The backup includes search indexes and installed optional layers. Allow space for the copy. The app adds verified future downloads to that backup library and keeps earlier copies. Run a fresh backup before uninstalling to include any saved places you added since the previous backup.
+
+After reinstalling, choose **Maps > Restore map library** and select the dated **Offline Maps Backup** folder. It restores missing regions and merges saved places. Restore works offline when the folder is available on the device. Run **Back up maps and places** again if you want to resume automatic map backups after reinstalling. [Android storage documentation](https://developer.android.com/training/data-storage/shared/documents-files)
 
 ### Copy maps and places between devices
 
@@ -98,7 +104,7 @@ The first command builds the app for development. The release script runs format
 
 ### Build Android
 
-Use the `android-v0.8.0` tag to reproduce the published preview.
+Use the `android-v0.9.0` tag to reproduce the published preview.
 
 On Windows, set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to the Android SDK. Install SDK platform 36, build tools 36.1.0, NDK `30.0.16248370`, Python 3 and `cargo-ndk`. Prepare the renderer assets, then run these commands from the repository root.
 
