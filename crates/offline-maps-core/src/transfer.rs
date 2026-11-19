@@ -1,10 +1,11 @@
 //! Verified, offline transfer of a prepared desktop region to Android.
 //! A transfer contains only active files and a SHA-256 manifest. Imports add
 //! regions; an existing region is never removed or overwritten.
-use std::collections::BTreeMap;
-use std::fs;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{self, File};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
@@ -172,6 +173,131 @@ pub fn describe_export(
         region: id.into(),
         files,
     })
+}
+
+/// Copy installed regions into a new library that Android can restore.
+/// The caller excludes source updates while the library is being made.
+pub fn export_library(
+    store: &PackageStore,
+    parent: &Path,
+    regions: &[String],
+    cancelled: &AtomicBool,
+    mut progress: impl FnMut(usize, usize, &str),
+) -> Result<PathBuf, PackageError> {
+    let unique: BTreeSet<_> = regions.iter().collect();
+    if unique.is_empty() || unique.len() != regions.len() {
+        return Err(invalid("Select one or more different installed maps."));
+    }
+    for id in regions {
+        if crate::regions::find(id).is_none() || store.active(id)?.is_none() {
+            return Err(invalid("A selected map is no longer installed."));
+        }
+    }
+    if !parent.is_absolute()
+        || fs::canonicalize(parent)?.starts_with(fs::canonicalize(store.root())?)
+    {
+        return Err(invalid(
+            "Choose an export folder outside the installed map store.",
+        ));
+    }
+    check_cancelled(cancelled)?;
+    let timestamp = crate::time::utc_now().replace(':', "-");
+    let staging = ExportStaging::create(
+        parent,
+        &format!(".offline-maps-export-{}-{timestamp}", std::process::id()),
+    )?;
+    let library = staging.0.join("library");
+    fs::create_dir(&library)?;
+    let mut buffer = vec![0; 1024 * 1024];
+    for (done, id) in regions.iter().enumerate() {
+        check_cancelled(cancelled)?;
+        progress(done, regions.len(), id);
+        let manifest = describe_export(store, id, cancelled)?;
+        let region = library.join(id);
+        fs::create_dir(&region)?;
+        for name in manifest.files.keys() {
+            let source = regular(store.root(), name)?;
+            let target = region.join(name);
+            fs::create_dir_all(target.parent().expect("transfer file parent"))?;
+            copy_export_file(&source, &target, &mut buffer, cancelled)?;
+        }
+        let json = serde_json::to_vec_pretty(&manifest)
+            .map_err(|e| invalid(format!("Could not write a transfer manifest: {e}")))?;
+        fs::write(region.join(MANIFEST), json)?;
+        verify(&region, cancelled)?;
+    }
+    check_cancelled(cancelled)?;
+    let name = format!("Offline Maps Library {timestamp}");
+    for suffix in 1.. {
+        let path = export_path(parent, &name, suffix);
+        if path.symlink_metadata().is_ok() {
+            continue;
+        }
+        match fs::rename(&library, &path) {
+            Ok(()) => return Ok(path),
+            Err(_) if path.symlink_metadata().is_ok() => continue,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    unreachable!("unbounded export name selection")
+}
+
+fn check_cancelled(cancelled: &AtomicBool) -> io::Result<()> {
+    if cancelled.load(Ordering::Relaxed) {
+        return Err(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "Map export cancelled.",
+        ));
+    }
+    Ok(())
+}
+
+fn copy_export_file(
+    source: &Path,
+    target: &Path,
+    buffer: &mut [u8],
+    cancelled: &AtomicBool,
+) -> io::Result<()> {
+    let mut input = File::open(source)?;
+    let mut output = File::create_new(target)?;
+    loop {
+        check_cancelled(cancelled)?;
+        let read = input.read(buffer)?;
+        if read == 0 {
+            return output.sync_all();
+        }
+        output.write_all(&buffer[..read])?;
+    }
+}
+
+fn export_path(parent: &Path, name: &str, suffix: u32) -> PathBuf {
+    if suffix == 1 {
+        parent.join(name)
+    } else {
+        parent.join(format!("{name} ({suffix})"))
+    }
+}
+
+struct ExportStaging(PathBuf);
+
+impl ExportStaging {
+    fn create(parent: &Path, name: &str) -> io::Result<Self> {
+        for suffix in 1.. {
+            let path = export_path(parent, name, suffix);
+            match fs::create_dir(&path) {
+                Ok(()) => return Ok(Self(path)),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        unreachable!("unbounded staging name selection")
+    }
+}
+
+impl Drop for ExportStaging {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 /// Checks checksums, coverage, formats, search/package association and every
@@ -453,6 +579,32 @@ pub(crate) mod tests {
         fs::write(&map, bytes).unwrap();
         assert!(describe_export(&store, "us-il", &running).is_err());
     }
+
+    #[test]
+    fn exports_verified_library_without_overwriting_and_cleans_up_failed_copy() {
+        let source = TempDir::new();
+        let destination = TempDir::new();
+        prepared(&source.0);
+        let store = PackageStore::new(&source.0);
+        let cancel = AtomicBool::new(false);
+        let map = vec!["us-il".to_owned()];
+        let first = export_library(&store, &destination.0, &map, &cancel, |_, _, _| {}).unwrap();
+        let second = export_library(&store, &destination.0, &map, &cancel, |_, _, _| {}).unwrap();
+        assert_ne!(first, second);
+        for library in [first, second] {
+            assert_eq!(verify(&library.join("us-il"), &cancel).unwrap(), "us-il");
+        }
+        assert!(export_library(&store, &source.0, &map, &cancel, |_, _, _| {}).is_err());
+        assert!(
+            export_library(&store, &destination.0, &map, &cancel, |_, _, _| {
+                cancel.store(true, Ordering::Relaxed);
+            })
+            .is_err()
+        );
+        assert_eq!(fs::read_dir(&destination.0).unwrap().count(), 2);
+        assert!(store.active("us-il").unwrap().is_some());
+    }
+
     #[test]
     fn cancellation_leaves_no_active_region() {
         let source = TempDir::new();

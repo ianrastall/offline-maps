@@ -30,17 +30,21 @@ GPS is available in the foreground on Android devices with satellite location ha
 | Platform | Where to find your data |
 | --- | --- |
 | Windows | **Places > Export saved places…** writes a JSON backup to a new file. **Places > Import saved places…** previews the merge. **File > Settings > Map folder** shows where the app keeps installed maps and its active `saved-places.json`. The default is `%LOCALAPPDATA%\Jupiter\OfflineMaps\Maps`. Settings, logs and the WebView2 profile live in `%LOCALAPPDATA%\Jupiter\OfflineMaps`. |
-| Android | **Maps > Back up maps and places** copies installed maps and saved places to a folder you choose. **Maps > Restore map library** imports from that folder. To back up places on their own, use **Saved > Export** and restore with **Saved > Import**. |
+| Android | **Maps > Map backup** shows the last successful backup and which installed maps and layers have a current copy. **Back up maps and places** copies them to a folder you choose. To back up places on their own, use **Saved > Export** and restore with **Saved > Import**. |
 
 On Windows, **Map > Map information** shows installed data and source details. To free space in **Map > Regions…**, select the region and use **Remove…**. Use **File > Settings > Map folder > Change…** to switch drives or move the app’s maps and saved places. Windows upgrades and uninstalls preserve maps, places and settings.
 
-On Android, install a newer signed APK over the existing app to keep its active maps and places. Before uninstalling or clearing app storage, use **Maps > Back up maps and places**, choose a folder in Documents or on an SD card, and wait for the backup confirmation. The backup includes search indexes and installed optional layers. Allow space for the copy. The app adds verified future downloads to that backup library and keeps earlier copies. Run a fresh backup before uninstalling to include any saved places you added since the previous backup.
+On Android, install a newer signed APK over the existing app to keep its active maps and places. The app offers to set up a backup when your first detailed map is ready. Before uninstalling or clearing app storage, open **Maps > Map backup**, choose **Back up maps and places**, select a folder in Documents or on an SD card, and wait for confirmation. The backup includes search indexes and installed optional layers. Allow space for the copy. The app adds verified future downloads to that backup library and keeps earlier copies. Run a fresh backup before uninstalling to include any saved places you added since the previous backup.
 
 After reinstalling, choose **Maps > Restore map library** and select the dated **Offline Maps Backup** folder. It restores missing regions and merges saved places. Restore works offline when the folder is available on the device. Run **Back up maps and places** again if you want to resume automatic map backups after reinstalling. [Android storage documentation](https://developer.android.com/training/data-storage/shared/documents-files)
 
 ### Copy maps and places between devices
 
-To transfer one installed region from Windows to Android, run the following from a checkout on the Windows PC. Replace `G:\Maps` with the map folder shown in Settings, `us-il` with the region ID, and the last path with a new folder outside the map store. Wait for any update to that region to finish before exporting. Use Python 3 for the export and the pinned Rust toolchain for the verification command.
+1. On Windows, open **Map > Export maps for Android…**, select installed regions, and choose a destination folder outside the map store. Wait for **Map library ready**.
+2. Copy the entire **Offline Maps Library** folder to the phone over USB, for example into Documents. Allow space on the phone for that folder and the app’s verified installed copy.
+3. On Android, open **Maps > Restore map library** and select the copied folder. Restore adds missing regions with their offline search indexes and optional layers. You can do the export and restore offline with the maps already installed on Windows.
+
+For a scriptable single-region export, run the following from a checkout on the Windows PC. Replace `G:\Maps` with the map folder shown in Settings, `us-il` with the region ID, and the last path with a new folder outside the map store. Wait for any update to that region to finish before exporting. Use Python 3 for the export and the pinned Rust toolchain for the verification command.
 
 ```powershell
 python -I tools/export-phone.py 'G:\Maps' us-il 'D:\Transfers\Illinois'
@@ -104,7 +108,7 @@ The first command builds the app for development. The release script runs format
 
 ### Build Android
 
-Use the `android-v0.9.0` tag to reproduce the published preview.
+Use the `android-v0.10.0` tag to reproduce the published preview.
 
 On Windows, set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to the Android SDK. Install SDK platform 36, build tools 36.1.0, NDK `30.0.16248370`, Python 3 and `cargo-ndk`. Prepare the renderer assets, then run these commands from the repository root.
 

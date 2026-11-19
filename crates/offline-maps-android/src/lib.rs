@@ -110,6 +110,12 @@ pub fn status_json(status: &pb::Status, overview: bool) -> Value {
         })).collect::<Vec<_>>(),
         "regions": status.regions.iter().filter(|r| r.map.is_some()).map(|r| json!({
             "id": r.id, "name": r.name, "date": r.map.as_ref().map(|m| &m.data_date),
+            "backupVersion": [
+                r.map.as_ref().map(|m| m.version.as_str()),
+                r.extras.as_ref().map(|e| e.version.as_str()),
+                r.terrain.as_ref().map(|t| t.version.as_str()),
+                r.overlays.as_ref().map(|o| o.version.as_str()),
+            ],
             "extras": r.extras.is_some(), "terrain": r.terrain.is_some(), "overlays": r.overlays.is_some(),
             "extrasDate": r.extras.as_ref().map(|e| &e.data_date),
             "terrainDate": r.terrain.as_ref().map(|t| &t.data_date),

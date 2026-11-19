@@ -545,6 +545,7 @@ public sealed partial class MainWindow
         {
             var work = start();
             _update = work;
+            UpdateMapCommands();
             return await work;
         }
         catch (MapCoreException ex) when (ex.Kind == ErrorKind.Cancelled)
@@ -564,6 +565,7 @@ public sealed partial class MainWindow
             _update = null;
             _current = null;
             ProgressText = "";
+            UpdateMapCommands();
         }
     }
 
@@ -616,19 +618,21 @@ public sealed partial class MainWindow
             "Removing" => "Removing",
             "Moving" when progress.Total > 0 => $"Copied {Format.Megabytes(progress.Done)} of {Format.Megabytes(progress.Total)}",
             "Moving" => "Starting",
+            "Exporting" when progress.RegionName.Length > 0 => $"Copying and verifying {progress.RegionName} · {progress.Done + 1} of {progress.Total}",
+            "Exporting" => "Preparing the library",
             _ => "Running",
         };
         if (progress.Cancelling)
         {
             text = "Cancelling";
         }
-        bool determinate = progress.Total > 0 && progress.Phase is "Downloading" or "Preparing" or "Moving" && !progress.Cancelling;
+        bool determinate = progress.Total > 0 && progress.Phase is "Downloading" or "Preparing" or "Moving" or "Exporting" && !progress.Cancelling;
         UpdateProgress.IsIndeterminate = !determinate;
         if (determinate)
         {
             UpdateProgress.Value = 100.0 * progress.Done / progress.Total;
         }
-        if (_current is null && progress.RegionName.Length > 0)
+        if (_current is null && progress.RegionName.Length > 0 && progress.Phase == "Preparing")
         {
             UpdateBar.Title = $"Preparing search for {progress.RegionName}";
         }

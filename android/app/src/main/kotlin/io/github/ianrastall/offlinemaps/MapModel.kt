@@ -84,6 +84,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         runCatching { prefs.getString("view", null)?.let { view = JSONObject(it) } }
         task(clearBusy = true) {
             core = session.open()
+            session.refreshBackup()
             val regions = core!!.use { JSONArray(NativeCore.catalogJson(it)).objects() }
             main.post { catalog = regions }
             refresh()
@@ -300,7 +301,18 @@ class MapModel(application: Application) : AndroidViewModel(application) {
 
     fun restoreMapLibrary(tree: Uri) = mapLibraryWork(tree, restoring = true)
 
-    val mapBackupEnabled: Boolean get() = session.backupEnabled
+    internal val mapBackup: MapSession.BackupStatus? get() = session.backupStatus
+    val offerMapBackup: Boolean get() = !hasWork && mapBackup == null && !session.backupSetupDismissed &&
+        (status?.optJSONArray("regions")?.length() ?: 0) > 0
+    fun dismissMapBackupOffer() = session.dismissBackupSetup()
+    fun checkMapBackup() = task { session.refreshBackup() }
+
+    internal fun isBackedUp(region: JSONObject): Boolean {
+        val backup = mapBackup ?: return false
+        val copy = backup.copies[region.getString("id")] ?: return false
+        return copy.version == region.getJSONArray("backupVersion").toString() && copy.folderId in backup.available.orEmpty()
+    }
+
     fun stopMapBackups() {
         if (!hasWork) session.stopBackups()
     }
@@ -322,7 +334,7 @@ class MapModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     val finished = library.backup(tree, progress)
                     main.post {
-                        val linked = session.linkBackup(tree, finished.rootId)
+                        val linked = session.linkBackup(tree, finished)
                         notice = finished.message + if (linked) " Future downloads will be backed up there."
                             else " Automatic backups could not be enabled for this folder."
                     }

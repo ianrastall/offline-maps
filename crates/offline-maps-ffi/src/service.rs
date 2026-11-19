@@ -1400,6 +1400,38 @@ impl Service {
             .map_err(|e| error(ErrorKind::InvalidData, e.to_string()))
     }
 
+    pub fn export_library(&self, request: &pb::ExportLibrary) -> Outcome<pb::ExportLibraryResult> {
+        let _busy = self.begin(pb::UpdateTarget::Unspecified, None)?;
+        lock(&self.progress).phase = "Exporting".into();
+        let path = offline_maps_core::transfer::export_library(
+            &self.store,
+            Path::new(&request.destination),
+            &request.region_ids,
+            &self.cancel,
+            |done, total, id| {
+                let mut progress = lock(&self.progress);
+                progress.done = done as u64;
+                progress.total = total as u64;
+                progress.region_name = offline_maps_core::regions::find(id)
+                    .map_or_else(|| id.to_owned(), |region| region.name.to_owned());
+            },
+        )
+        .map_err(|e| match e {
+            offline_maps_core::mbtiles::PackageError::Io(ref io)
+                if io.kind() == std::io::ErrorKind::Interrupted =>
+            {
+                error(ErrorKind::Cancelled, "Map export cancelled.")
+            }
+            offline_maps_core::mbtiles::PackageError::Io(_) => {
+                error(ErrorKind::Storage, e.to_string())
+            }
+            _ => error(ErrorKind::InvalidData, e.to_string()),
+        })?;
+        Ok(pb::ExportLibraryResult {
+            path: path.to_string_lossy().into_owned(),
+        })
+    }
+
     /// Applies a verified transfer, journaling all provided map/layer pointers.
     pub fn import_transfer(&self, staged: &Path, replace: bool) -> Outcome<String> {
         let _busy = self.begin(pb::UpdateTarget::Map, None)?;

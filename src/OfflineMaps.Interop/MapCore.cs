@@ -146,6 +146,14 @@ public sealed class MapCore : IDisposable
     /// <summary>Deletes a region's map, search index and extras. Saved places are kept.</summary>
     public void RemoveRegion(string regionId) => Call(new Request { RemoveRegion = new RemoveRegion { RegionId = regionId } });
 
+    /// <summary>Exports verified copies of selected maps to a new folder inside the destination.</summary>
+    public string ExportLibrary(string destination, IEnumerable<string> regionIds)
+    {
+        var export = new ExportLibrary { Destination = destination };
+        export.RegionIds.Add(regionIds);
+        return Call(new Request { ExportLibrary = export }).ExportLibrary.Path;
+    }
+
     /// <summary>A terrain tile (Terrarium-encoded WebP), or an empty array where no installed terrain has one.</summary>
     public byte[] TerrainTile(int z, int x, int y)
     {

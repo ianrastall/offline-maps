@@ -178,6 +178,9 @@ fn dispatch(service: &Service, request: pb::Request) -> pb::Response {
                     skipped: result.skipped as u32,
                 }))
             }),
+        Some(Command::ExportLibrary(request)) => service
+            .export_library(&request)
+            .map(|result| Some(R::ExportLibrary(result))),
     };
     match result {
         Ok(result) => pb::Response {

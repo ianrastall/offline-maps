@@ -37,6 +37,7 @@ public sealed partial class MainWindow
     {
         FocusMapItem.IsEnabled = CanUseMap;
         SaveMapImageItem.IsEnabled = CanSaveMapImage;
+        ExportLibraryItem.IsEnabled = CanExportLibrary;
     }
 
     private void FocusMap_Click(object sender, RoutedEventArgs e)

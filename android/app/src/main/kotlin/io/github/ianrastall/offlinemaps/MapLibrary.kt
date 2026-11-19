@@ -53,7 +53,10 @@ internal class MapLibrary(
     }
 
     private data class Child(val uri: Uri, val name: String, val type: String)
-    data class Backup(val rootId: String, val message: String)
+    data class Copy(val version: String, val folderId: String)
+    data class Backup(val rootId: String, val maps: Map<String, Copy>) {
+        val message: String get() = "Backed up ${countText(maps.size, "map")} and saved places."
+    }
 
     private fun regions(): List<JSONObject> = core.use {
         JSONObject(NativeCore.statusJson(it, true)).getJSONArray("regions").objects()
@@ -64,7 +67,7 @@ internal class MapLibrary(
         val regions = regions()
         val backup = folder.create(folder.root, Document.MIME_TYPE_DIR, "Offline Maps Backup ${stamp()}", exact = false)
         val buffer = ByteArray(1 shl 20)
-        var finished = 0
+        val finished = mutableMapOf<String, Copy>()
         try {
             operation.checkCancelled()
             val saved = core.use { NativeCore.exportPlaces(it) }
@@ -75,34 +78,51 @@ internal class MapLibrary(
                 val name = region.getString("name")
                 progress("Preparing backup for $name…")
                 val manifest = core.use { NativeCore.describeExport(it, id) }
-                progress("Backing up $name · ${finished + 1} of ${regions.size} maps")
-                writeRegion(folder, backup, id, manifest, buffer)
-                finished++
+                progress("Backing up $name · ${finished.size + 1} of ${regions.size} maps")
+                val target = writeRegion(folder, backup, id, manifest, buffer)
+                finished[id] = Copy(region.getJSONArray("backupVersion").toString(), DocumentsContract.getDocumentId(target))
             }
         } catch (failure: Exception) {
-            error("Backup stopped after ${countText(finished, "map")}. ${failure.message.orEmpty()}")
+            error("Backup stopped after ${countText(finished.size, "map")}. ${failure.message.orEmpty()}")
         }
-        return Backup(DocumentsContract.getDocumentId(backup), "Backed up ${countText(finished, "map")} and saved places.")
+        return Backup(DocumentsContract.getDocumentId(backup), finished)
     }
 
     /** Add a changed region to the existing library after a verified download. */
-    fun backupDownload(tree: Uri, rootId: String, id: String) {
+    fun backupDownload(tree: Uri, rootId: String, id: String): Copy {
         val folder = Folder(tree)
         val library = folder.uri(rootId)
         operation.checkCancelled()
         val manifest = core.use { NativeCore.describeExport(it, id) }
+        val version = regions().first { it.getString("id") == id }.getJSONArray("backupVersion").toString()
         val recent = folder.children(library)
             .filter { it.type == Document.MIME_TYPE_DIR && (it.name == id || it.name.startsWith("$id ")) }
-            .sortedByDescending { it.name }
-            .firstOrNull()
+            .maxByOrNull { it.name }
         if (recent != null) {
             val marker = folder.children(recent.uri).firstOrNull { it.name == MANIFEST }
-            if (marker != null && runCatching { readText(marker.uri, 64 * 1024) }.getOrNull() == manifest) return
+            if (marker != null && runCatching { readText(marker.uri, 64 * 1024) }.getOrNull() == manifest) {
+                return Copy(version, DocumentsContract.getDocumentId(recent.uri))
+            }
         }
-        writeRegion(folder, library, "$id ${stamp()}", manifest, ByteArray(1 shl 20))
+        val target = writeRegion(folder, library, "$id ${stamp()}", manifest, ByteArray(1 shl 20))
+        return Copy(version, DocumentsContract.getDocumentId(target))
     }
 
-    private fun writeRegion(folder: Folder, root: Uri, name: String, manifest: String, buffer: ByteArray) {
+    fun availableCopies(tree: Uri, rootId: String, copies: Collection<Copy>): Set<String> {
+        val folder = Folder(tree)
+        val root = folder.uri(rootId)
+        val exists = resolver.query(root, arrayOf(Document.COLUMN_MIME_TYPE), null, null, null)?.use {
+            it.moveToFirst() && it.getString(0) == Document.MIME_TYPE_DIR
+        }
+        check(exists == true) { "The backup folder could not be found." }
+        val children = folder.children(root)
+        val copiedIds = copies.mapTo(hashSetOf()) { it.folderId }
+        return children.asSequence().filter { DocumentsContract.getDocumentId(it.uri) in copiedIds }
+            .filter { child -> runCatching { folder.children(child.uri).any { it.name == MANIFEST } }.getOrDefault(false) }
+            .map { DocumentsContract.getDocumentId(it.uri) }.toSet()
+    }
+
+    private fun writeRegion(folder: Folder, root: Uri, name: String, manifest: String, buffer: ByteArray): Uri {
         operation.checkCancelled()
         val files = JSONObject(manifest).getJSONObject("files")
         val target = folder.create(root, Document.MIME_TYPE_DIR, name, exact = false)
@@ -126,6 +146,7 @@ internal class MapLibrary(
             }
             // The manifest is the completion marker for readers.
             writeText(folder, target, MANIFEST, manifest)
+            return target
         } catch (failure: Exception) {
             runCatching { DocumentsContract.deleteDocument(resolver, target) }
             throw failure

@@ -62,10 +62,21 @@ message Request {
     RemoveMovedSource remove_moved_source = 17;
     ExportPlaces export_places = 18;
     ImportPlaces import_places = 19;
+    ExportLibrary export_library = 20;
   }
 }
 
 message GetStatus {}
+
+message ExportLibrary {
+  repeated string region_ids = 1;
+  // Existing directory where the core creates a new, verified library folder.
+  string destination = 2;
+}
+
+message ExportLibraryResult {
+  string path = 1;
+}
 
 message Search {
   string query = 1;
@@ -220,6 +231,7 @@ message Response {
     MoveStoreResult move_store = 12;
     PlacesBackup places_backup = 13;
     PlacesImportResult places_import = 14;
+    ExportLibraryResult export_library = 15;
   }
 }
 

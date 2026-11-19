@@ -120,7 +120,7 @@ class MainActivity : ComponentActivity() {
         } else if (precise()) { model.gpsWanted = true; model.following = true; startGps() }
         else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
-    override fun onResume() { super.onResume(); resumed = true; model.downloads.foreground(true); startGps(); handler.post(tick) }
+    override fun onResume() { super.onResume(); resumed = true; model.downloads.foreground(true); model.checkMapBackup(); startGps(); handler.post(tick) }
     override fun onPause() {
         resumed = false; handler.removeCallbacks(tick); locations.removeUpdates(listener)
         model.downloads.foreground(false)
@@ -257,6 +257,13 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = { model.notice = null; model.downloads.notice = null }) { Text("Dismiss") }
                     }
                 }
+                if (ready && panel == null && model.offerMapBackup) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Keep your maps if you reinstall.", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { panel = "backup" }) { Text("Set up backup") }
+                        TextButton(onClick = model::dismissMapBackupOffer) { Text("Later") }
+                    }
+                }
                 Text(model.gpsText, Modifier.fillMaxWidth().clickable {
                     if (model.gpsWanted && !locations.isProviderEnabled(LocationManager.GPS_PROVIDER)) startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                     else if (!precise()) startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
@@ -276,6 +283,8 @@ class MainActivity : ComponentActivity() {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     val regions = model.status!!.getJSONArray("regions").objects()
                     if (regions.isEmpty()) Text("No detailed maps installed. Download a region while online, or import a prepared folder from the desktop.")
+                    TextButton(onClick = { model.checkMapBackup(); panel = "backup" }) { Text("Map backup") }
+                    TextButton(onClick = { panel = null; restorePicker.launch(null) }, enabled = !model.hasWork) { Text("Restore map library") }
                     regions.forEach { region ->
                         Text("${region.getString("name")} · ${region.optString("date")}\n" +
                             listOfNotNull("Roads and search", "Stations and addresses".takeIf { region.getBoolean("extras") },
@@ -283,17 +292,13 @@ class MainActivity : ComponentActivity() {
                             Modifier.fillMaxWidth().clickable { downloadRegion = region.getString("id"); panel = "downloads" }.padding(vertical = 6.dp))
                     }
                     TextButton(onClick = { panel = null; picker.launch(null) }, enabled = !model.hasWork) { Text("Import map folder") }
-                    TextButton(onClick = { panel = null; restorePicker.launch(null) }, enabled = !model.hasWork) { Text("Restore map library") }
-                    Text("Choose a folder in Documents or on an SD card. The app copies future downloads to that backup.", style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { panel = null; backupPicker.launch(null) },
-                        enabled = !model.hasWork) { Text("Back up maps and places") }
-                    if (model.mapBackupEnabled) {
-                        TextButton(onClick = model::stopMapBackups, enabled = !model.hasWork) { Text("Stop automatic map backups") }
-                    }
                     Row { Checkbox(model.layers, { model.toggleLayers(it) }); Text("Show optional map layers", Modifier.padding(top = 12.dp)) }
                 }
             }, confirmButton = { TextButton(onClick = { downloadRegion = null; panel = "downloads" }) { Text("Download maps") } },
             dismissButton = { TextButton(onClick = { panel = null }) { Text("Close") } })
+        if (panel == "backup") {
+            MapBackupDialog(model, onBackUp = { panel = null; backupPicker.launch(null) }, onClose = { panel = null })
+        }
         if (panel == "downloads") DownloadsDialog(model, downloadRegion) { panel = null }
         model.transferReview?.let { TransferReview(model, it) }
         if (panel == "saved") SavedPlacesDialog(model,
