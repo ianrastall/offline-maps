@@ -158,12 +158,12 @@ class MainActivity : ComponentActivity() {
                     TextButton(onClick = { panel = "about" }) { Text("About") }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    OutlinedTextField(model.query, { model.query = it.take(200) }, Modifier.weight(1f),
+                    OutlinedTextField(model.query, model::editQuery, Modifier.weight(1f),
                         label = { Text("Search offline") }, singleLine = true, enabled = ready,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { model.search(); keyboard?.hide() }))
                     TextButton(onClick = { model.search(); keyboard?.hide() }, enabled = ready && !model.searching) { Text("Find") }
-                    if (model.results.isNotEmpty()) TextButton(onClick = { model.results = emptyList() }) { Text("Close") }
+                    if (model.results.isNotEmpty()) TextButton(onClick = model::dismissSearchResults) { Text("Close") }
                 }
                 if (model.searching) LinearProgressIndicator(Modifier.fillMaxWidth())
                 model.searchHint?.let { Text(it, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall) }
@@ -171,7 +171,7 @@ class MainActivity : ComponentActivity() {
                     items(model.results) { result ->
                         ListItem(headlineContent = { Text(result.getString("name")) },
                             supportingContent = { Text(listOf(result.optString("category").replace('_', ' '), result.optString("near"), result.optString("detail")).filter { it.isNotBlank() }.joinToString(" · ")) },
-                            modifier = Modifier.clickable { model.show(result); selected = result; model.results = emptyList() })
+                            modifier = Modifier.clickable { model.show(result); selected = result; model.dismissSearchResults() })
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {

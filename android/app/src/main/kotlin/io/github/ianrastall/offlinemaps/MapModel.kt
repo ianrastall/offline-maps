@@ -24,9 +24,13 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     private var placesBackup: String? = null
     var busy by mutableStateOf<String?>("Opening maps…")
     var results by mutableStateOf<List<JSONObject>>(emptyList())
+        private set
     var searching by mutableStateOf(false)
+        private set
     var searchHint by mutableStateOf<String?>(null)
+        private set
     var query by mutableStateOf("")
+        private set
     var catalog by mutableStateOf<List<JSONObject>>(emptyList())
     var gpsWanted by mutableStateOf(false)
     var following by mutableStateOf(false)
@@ -128,12 +132,26 @@ class MapModel(application: Application) : AndroidViewModel(application) {
         put("outdoor", layers); put("flood", layers); put("lands", layers); put("shading", layers); put("contours", layers)
         view?.let { put("view", it) }
     }
+    fun editQuery(value: String) {
+        val next = value.take(200)
+        if (next == query) return
+        query = next
+        dismissSearchResults()
+    }
+
+    fun dismissSearchResults() {
+        searchGeneration++
+        results = emptyList()
+        searchHint = null
+        searching = false
+    }
+
     fun search() {
         val text = query.trim()
-        if (text.isEmpty()) { results = emptyList(); searchHint = null; return }
-        val generation = ++searchGeneration
+        if (text.isEmpty() || searching) return
+        dismissSearchResults()
+        val generation = searchGeneration
         searching = true
-        searchHint = null
         val at = view
         val lat = at?.optDouble("latitude", 39.8) ?: 39.8
         val lon = at?.optDouble("longitude", -89.6) ?: -89.6
