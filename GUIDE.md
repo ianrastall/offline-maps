@@ -17,6 +17,8 @@ On Windows, if the drive holding your map folder is unavailable at startup, the 
 
 Press **F6** or choose **View > Focus map** to put keyboard focus on the map. The outline shows where focus is. Use the arrow keys to pan, plus and minus to zoom, and **Ctrl+F** to return to search. Press **Enter** in search to select the first result.
 
+To keep an image of the visible map on Android, choose **More > Save map image**. The PNG appears in **Pictures > Offline Maps** with the visible labels, layers, markers, scale and credits. You can open it in a gallery or file manager while offline.
+
 Android downloads can continue while the screen is off or another app is open. Enable notifications for progress and **Pause** outside the app. If the selected connection drops or the transfer is interrupted, reopen **Maps > Download maps** and use **Resume**.
 
 GPS is available in the foreground on Android devices with satellite location hardware. Enable it in the app, grant precise location and wait for a fresh fix. Touching the map pauses following. **Follow** recenters on your position. Warm offline fixes were verified on a physical phone. Cold acquisition after a prolonged offline period and extended battery behavior remain unverified. [Android verification](docs/android-app.md)
@@ -96,7 +98,7 @@ The first command builds the app for development. The release script runs format
 
 ### Build Android
 
-Use the `android-v0.6.1` tag to reproduce the published preview.
+Use the `android-v0.7.0` tag to reproduce the published preview.
 
 On Windows, set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to the Android SDK. Install SDK platform 36, build tools 36.1.0, NDK `30.0.16248370`, Python 3 and `cargo-ndk`. Prepare the renderer assets, then run these commands from the repository root.
 
