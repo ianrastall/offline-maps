@@ -177,3 +177,9 @@ Editing the offline search field clears the previous results and any no-results 
 On the Galaxy S26 FE, the signed 0.6.1 APK upgraded 0.6.0 in place. All six installed regions retained their listed dates and layers, and saved-place exports were byte-identical. In airplane mode with no active network, searching for Madison returned the state capital. Editing the query hid those results, and searching for Madison again opened the local Wisconsin map.
 
 Published 19 November 2026 as the [android-v0.6.1 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.6.1) from `588fc5c3f24f0b0902ac62f7137bbe8d2bb10d01`. The signed APK is 128,370,499 bytes and uses the same certificate as 0.6.0. Its SHA-256, `b20821f9b24733a025e6252002b3f66a66a4652b53139e0629b74fd58a6a8613`, matched the installed APK and the published GitHub asset.
+
+### Power and GPS checks
+
+On 19 November, the Android 16 emulator ran the 0.6.1 debug build. With charging simulated off and the screen asleep, the emulator entered forced deep Doze during a Vermont road-map download. The transfer advanced from 5.2 MB staged to a verified and indexed 77.8 MB map. The completion notification appeared and the service stopped while Android still reported deep idle. The wake lock was released. The power overrides were reset. In airplane mode with no active default network, Montpelier search and rendering passed with I-89 shields, scale and attribution visible. [Android Doze test procedure](https://developer.android.com/training/monitoring-device-state/doze-standby)
+
+In a separate 126-second trial on the Galaxy in airplane mode with no active network, the GPS provider reported zero visible satellites and the app received no fix. GPS was turned off afterward. Cold acquisition under clear-sky conditions after prolonged offline use and background downloads on physical battery power remain open.
