@@ -38,6 +38,7 @@ object NativeCore {
     @JvmStatic external fun importTransfer(handle: Long, staged: String, replace: Boolean): String
     @JvmStatic external fun cancel(handle: Long)
     @JvmStatic external fun catalogJson(handle: Long): String
+    @JvmStatic external fun stagedDownloadsJson(handle: Long): String
     @JvmStatic external fun progressJson(handle: Long): String
     @JvmStatic external fun updateJson(handle: Long, region: String, target: Int, checkOnly: Boolean): String
 }

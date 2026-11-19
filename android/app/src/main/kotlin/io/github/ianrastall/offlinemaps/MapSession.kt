@@ -47,7 +47,10 @@ class MapSession(private val app: Application) {
         val maps = File(app.noBackupFilesDir, "maps").apply { mkdirs() }
         // Only on a fresh process: never remove another screen's active import.
         File(maps, ".imports").deleteRecursively()
-        return CoreStore(maps.absolutePath, overview.absolutePath).also { core = it }
+        return CoreStore(maps.absolutePath, overview.absolutePath).also {
+            core = it
+            downloads.recoverStaged(it)
+        }
     }
 
     fun listen(listener: () -> Unit) { listeners.add(listener) }

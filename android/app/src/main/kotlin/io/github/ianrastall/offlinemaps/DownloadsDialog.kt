@@ -16,12 +16,21 @@ import org.json.JSONObject
 @Composable
 fun DownloadsDialog(model: MapModel, initialRegion: String?, onDismiss: () -> Unit) {
     var selectedId by remember { mutableStateOf(initialRegion) }
+    var showUnfinished by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf(if (initialRegion == null) model.catalog.find {
         it.getString("id") == model.status?.getJSONArray("regions")?.objects()?.firstOrNull()?.getString("id")
     }?.getString("country") ?: "" else "") }
     val selected = model.catalog.find { it.getString("id") == selectedId }
     val installed = model.status?.getJSONArray("regions")?.objects() ?: emptyList()
     val downloads = model.downloads
+    val unfinished = downloads.pending.filter { it != downloads.activeRequest }.mapNotNull { request ->
+        model.catalog.find { it.getString("id") == request.region }?.let { request to it }
+    }
+    fun resume(request: DownloadRequest, region: JSONObject) {
+        showUnfinished = false
+        selectedId = request.region
+        model.startDownload(region, request.target)
+    }
     val free = LocalContext.current.noBackupFilesDir.usableSpace
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize()) {
@@ -91,11 +100,19 @@ fun DownloadsDialog(model: MapModel, initialRegion: String?, onDismiss: () -> Un
                         Text(downloads.message, Modifier.weight(1f).padding(vertical = 12.dp))
                         TextButton(onClick = { downloads.pause() }) { Text("Pause") }
                     }
-                } else downloads.pending?.let { request ->
-                    val region = model.catalog.find { it.getString("id") == request.region }
-                    if (region != null) Row {
-                        Text("Unfinished: ${region.getString("name")}", Modifier.weight(1f).padding(vertical = 12.dp))
-                        TextButton(onClick = { selectedId = request.region; model.startDownload(region, request.target) }) { Text("Resume") }
+                }
+                if (!downloads.active && unfinished.size == 1) {
+                    val (request, region) = unfinished.single()
+                    Row {
+                        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                            Text("Unfinished: ${region.getString("name")}")
+                            Text(downloadTargetName(request.target), style = MaterialTheme.typography.bodySmall)
+                        }
+                        TextButton(onClick = { resume(request, region) }, enabled = !model.hasWork) { Text("Resume") }
+                    }
+                } else if (unfinished.isNotEmpty()) {
+                    TextButton(onClick = { showUnfinished = true }) {
+                        Text("Unfinished downloads (${unfinished.size})")
                     }
                 }
                 downloads.error?.let { message ->
@@ -109,11 +126,29 @@ fun DownloadsDialog(model: MapModel, initialRegion: String?, onDismiss: () -> Un
             }
         }
     }
+    if (showUnfinished) AlertDialog(
+        onDismissRequest = { showUnfinished = false },
+        title = { Text("Unfinished downloads") },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                items(unfinished, key = { (request, _) -> "${request.region}:${request.target}" }) { (request, region) ->
+                    ListItem(
+                        headlineContent = { Text(region.getString("name")) },
+                        supportingContent = { Text(downloadTargetName(request.target)) },
+                        trailingContent = {
+                            TextButton(onClick = { resume(request, region) }, enabled = !model.hasWork) { Text("Resume") }
+                        },
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showUnfinished = false }) { Text("Close") } },
+    )
 }
 
 @Composable
 private fun DownloadOption(model: MapModel, region: JSONObject, target: Int, title: String, detail: String, bytes: Long, installed: Boolean, available: Boolean, installedDetail: String? = null) {
-    val resume = model.downloads.pending == DownloadRequest(region.getString("id"), target)
+    val request = DownloadRequest(region.getString("id"), target)
     Column {
         Row {
             Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
@@ -121,13 +156,25 @@ private fun DownloadOption(model: MapModel, region: JSONObject, target: Int, tit
                 Text("About ${sizeText(bytes)}${if (installed) " · installed" else ""}", style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = { model.startDownload(region, target) }, enabled = available && !model.hasWork) {
-                Text(if (resume && model.downloads.active) "In progress" else if (resume) "Resume" else if (installed) "Update" else "Download")
+                Text(when {
+                    model.downloads.activeRequest == request -> "In progress"
+                    request in model.downloads.pending -> "Resume"
+                    installed -> "Update"
+                    else -> "Download"
+                })
             }
         }
         Text(detail, style = MaterialTheme.typography.bodySmall)
         if (installedDetail != null) Text(installedDetail, style = MaterialTheme.typography.bodySmall)
         HorizontalDivider(Modifier.padding(top = 12.dp))
     }
+}
+
+private fun downloadTargetName(target: Int): String = when (target) {
+    2 -> "Stations and addresses"
+    3 -> "Terrain"
+    4 -> "Flood zones and public lands"
+    else -> "Road map and search"
 }
 
 private fun metadataText(state: JSONObject?, key: String, label: String): String? =

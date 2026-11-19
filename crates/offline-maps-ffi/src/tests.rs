@@ -33,6 +33,51 @@ fn prepared_only_never_falls_back_to_a_raw_extract() {
     assert!(!service.status().updating);
 }
 
+#[test]
+fn staged_downloads_recover_multiple_regions_and_layers_without_client_state() {
+    use offline_maps_core::store::{PackageStore, StagingState};
+    use pb::UpdateTarget::{Extras, Map, Overlays, Terrain};
+    use std::fs;
+
+    let dir = TempDir::new();
+    let store = PackageStore::new(&dir.0);
+    let state = StagingState {
+        url: "https://example.test/package".into(),
+        etag: Some("\"package\"".into()),
+        last_modified: None,
+        total: Some(100),
+    };
+    for id in ["us-il", "us-de/extras", "us-in/overlays"] {
+        store.write_staging(id, &state).unwrap();
+        fs::write(store.staging_file(id), b"previously downloaded").unwrap();
+    }
+    store.write_staging("us-mi", &state).unwrap();
+    fs::write(store.staging_file("us-mi"), []).unwrap();
+    let terrain = store.staging_dir("us-de/terrain");
+    fs::create_dir_all(&terrain).unwrap();
+    fs::write(
+        terrain.join("staging.json"),
+        br#"{"url":"https://example.test/terrain","validator":"terrain","bounds":{"west":-76.0,"south":38.0,"east":-75.0,"north":40.0},"max_zoom":12}"#,
+    )
+    .unwrap();
+    fs::write(terrain.join("terrain.part.mbtiles"), b"downloaded tiles").unwrap();
+    let service = service::Service::open(&pb::Config {
+        store_directory: dir.0.display().to_string(),
+        ..Default::default()
+    })
+    .unwrap();
+    let pending = service.staged_downloads();
+    assert_eq!(pending.len(), 4, "{pending:?}");
+    for request in [
+        ("us-il", Map),
+        ("us-de", Extras),
+        ("us-de", Terrain),
+        ("us-in", Overlays),
+    ] {
+        assert!(pending.contains(&request), "{pending:?}");
+    }
+}
+
 struct TempDir(PathBuf);
 impl TempDir {
     fn new() -> Self {

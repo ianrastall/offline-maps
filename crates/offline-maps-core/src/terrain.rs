@@ -52,6 +52,19 @@ pub fn terrain_id(region_id: &str) -> String {
     format!("{region_id}/terrain")
 }
 
+const STAGING_DATABASE: &str = "terrain.part.mbtiles";
+const STAGING_RECORD: &str = "staging.json";
+
+/// Whether a previous terrain download left a database and its resume record.
+pub fn has_staged_terrain(store: &PackageStore, region_id: &str) -> bool {
+    let staging = store.staging_dir(&terrain_id(region_id));
+    fs::read(staging.join(STAGING_RECORD))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Staging>(&bytes).ok())
+        .is_some()
+        && fs::metadata(staging.join(STAGING_DATABASE)).is_ok_and(|db| db.is_file() && db.len() > 0)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerrainRecord {
     pub schema: u32,
@@ -336,8 +349,8 @@ pub fn update_terrain(
         bounds,
         max_zoom,
     };
-    let db_path = staging_dir.join("terrain.part.mbtiles");
-    let state_path = staging_dir.join("staging.json");
+    let db_path = staging_dir.join(STAGING_DATABASE);
+    let state_path = staging_dir.join(STAGING_RECORD);
     let resumable = fs::read_to_string(&state_path)
         .ok()
         .and_then(|t| serde_json::from_str::<Staging>(&t).ok())

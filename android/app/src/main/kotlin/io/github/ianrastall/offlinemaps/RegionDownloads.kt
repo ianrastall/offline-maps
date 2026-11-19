@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.ianrastall.offlinemaps.core.NativeCore
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
@@ -18,7 +19,15 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class DownloadRequest(val region: String, val target: Int) {
-    fun json() = JSONObject().put("region", region).put("target", target).toString()
+    fun json() = JSONObject().put("region", region).put("target", target)
+
+    companion object {
+        fun read(value: JSONObject): DownloadRequest? {
+            val region = value.optString("region")
+            val target = value.optInt("target")
+            return if (region.isNotBlank() && target in 1..4) DownloadRequest(region, target) else null
+        }
+    }
 }
 
 /** One service-owned download at a time. The core owns staging and activation. */
@@ -50,12 +59,33 @@ class RegionDownloads(
         private set
     var wifiOnly by mutableStateOf(preferences.getBoolean("wifiOnly", true))
         private set
-    var pending by mutableStateOf(runCatching {
-        preferences.getString("pending", null)?.let { JSONObject(it) }?.let {
-            DownloadRequest(it.getString("region"), it.getInt("target"))
-        }
-    }.getOrNull())
+    var pending by mutableStateOf(readPending())
         private set
+    val activeRequest: DownloadRequest? get() = job?.request
+
+    private fun readPending(): List<DownloadRequest> {
+        val list = runCatching {
+            val array = JSONArray(preferences.getString("pendingDownloads", "[]"))
+            (0 until array.length()).mapNotNull { array.optJSONObject(it)?.let(DownloadRequest::read) }
+        }.getOrDefault(emptyList())
+        val legacy = runCatching {
+            preferences.getString("pending", null)?.let { DownloadRequest.read(JSONObject(it)) }
+        }.getOrNull()
+        return (list + listOfNotNull(legacy)).distinct()
+    }
+
+    private fun writePending(requests: List<DownloadRequest>): Boolean =
+        preferences.edit().putString("pendingDownloads", JSONArray(requests.map(DownloadRequest::json)).toString())
+            .remove("pending").commit()
+
+    // Once per session, recover bytes left by apps that remembered only one download.
+    // The staged files are durable, so the next download can persist the merged list.
+    fun recoverStaged(core: CoreStore) {
+        val staged = runCatching {
+            core.use { JSONArray(NativeCore.stagedDownloadsJson(it)).objects().mapNotNull(DownloadRequest::read) }
+        }.getOrDefault(emptyList())
+        if (staged.isNotEmpty()) main.post { pending = (pending + staged).distinct() }
+    }
 
     private val networks = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) { refreshConnection() }
@@ -150,7 +180,7 @@ class RegionDownloads(
             val maps = File(context.noBackupFilesDir, "maps")
             // A resumed transfer already occupies staging space. Let the core
             // check the exact remaining bytes against the server's current file.
-            val needed = if (pending == request) 256L shl 20 else
+            val needed = if (request in pending) 256L shl 20 else
                 Math.addExact(Math.multiplyExact(estimatedBytes.coerceAtLeast(0), if (request.target == 1) 2L else 1L), 256L shl 20)
             check(maps.usableSpace >= needed) { "Not enough free space to download and prepare this file. Allow about ${sizeText(needed)}." }
             network()
@@ -159,8 +189,7 @@ class RegionDownloads(
         runId = android.os.SystemClock.elapsedRealtimeNanos()
         title = "$regionName · ${when (request.target) { 1 -> "map and search"; 2 -> "stations and addresses"; 3 -> "terrain"; else -> "flood zones and public lands" }}"
         job = current; active = true; message = "Checking the download…"; fraction = null
-        pending = request
-        preferences.edit().putString("pending", request.json()).apply()
+        if (request !in pending) pending = pending + request
         runCatching {
             context.startForegroundService(Intent(context, DownloadService::class.java).setAction(DownloadService.START).putExtra(DownloadService.RUN, runId))
         }.onFailure { serviceFailed(it) }
@@ -173,10 +202,14 @@ class RegionDownloads(
         current.started = true
         val request = current.request
         val selected = current.network
+        val queued = pending
         main.post(poll)
         worker.execute {
             val previous = connectivity.boundNetworkForProcess
             val result = runCatching {
+                // Record the request before native work stages any bytes. Only
+                // this worker writes the list, and only one transfer owns it.
+                check(writePending(queued)) { "Could not save the unfinished download list." }
                 check(!current.cancelled.get()) { "Download paused." }
                 // Pin sockets/DNS to the selected network. Losing Wi-Fi cannot
                 // silently move this transfer onto the phone's mobile data.
@@ -188,14 +221,20 @@ class RegionDownloads(
             // Cancellation can arrive just as atomic activation completes. Report
             // successful activation as success rather than a fictitious pause.
             val refreshFailure = if (result.isSuccess) runCatching(changed).exceptionOrNull() else null
+            val remaining = queued - request
+            val completionRecorded = result.isSuccess && runCatching { writePending(remaining) }.getOrDefault(false)
             main.post {
                 if (job !== current) return@post
                 main.removeCallbacks(poll)
                 job = null; active = false; fraction = null
                 result.onSuccess { data ->
-                    pending = null; preferences.edit().remove("pending").apply()
-                    notice = if (refreshFailure != null) "The file is ready. Reopen Offline Maps to refresh the display."
-                        else if (data.optBoolean("upToDate")) "The installed file is up to date." else "The download is ready offline."
+                    if (completionRecorded) pending = remaining
+                    notice = when {
+                        !completionRecorded -> "The file is ready. The unfinished download list could not be saved."
+                        refreshFailure != null -> "The file is ready. Reopen Offline Maps to refresh the display."
+                        data.optBoolean("upToDate") -> "The installed file is up to date."
+                        else -> "The download is ready offline."
+                    }
                 }.onFailure {
                     if (current.cancelled.get()) notice = current.pauseReason
                     else error = (it.message ?: "Download failed.").removePrefix("Rust error: ") + " You can retry or resume this download."

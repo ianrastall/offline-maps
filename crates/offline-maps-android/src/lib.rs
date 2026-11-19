@@ -448,6 +448,26 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_cat
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_stagedDownloadsJson<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let staged = unsafe { service(handle) }?.staged_downloads();
+            let requests: Vec<_> = staged
+                .into_iter()
+                .map(|(id, target)| json!({ "region": id, "target": target as i32 }))
+                .collect();
+            text(env, &json!(requests).to_string())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_progressJson<
     'local,
 >(

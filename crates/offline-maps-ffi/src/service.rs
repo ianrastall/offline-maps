@@ -16,15 +16,15 @@ use offline_maps_core::download::{
     HttpTransport, Newer, Progress, UpdateError, UpdateOptions, UpdateOutcome, update_region,
 };
 use offline_maps_core::extras::{
-    ActiveExtras, ExtrasOutcome, active_extras, prune_extras, stations_geojson_all, update_extras,
-    update_extras_prepared,
+    ActiveExtras, ExtrasOutcome, active_extras, extras_id, prune_extras, stations_geojson_all,
+    update_extras, update_extras_prepared,
 };
 use offline_maps_core::mbtiles::{Bounds, TileEncoding, TilePackage};
 use offline_maps_core::merge::merge_tiles;
 use offline_maps_core::mvt::tile_point_to_lon_lat;
 use offline_maps_core::overlays::{
-    ActiveOverlays, OVERLAYS_BASE, OverlaysOutcome, active_overlays, overlays_url, prune_overlays,
-    update_overlays,
+    ActiveOverlays, OVERLAYS_BASE, OverlaysOutcome, active_overlays, overlays_id, overlays_url,
+    prune_overlays, update_overlays,
 };
 use offline_maps_core::package::{ILLINOIS, Region};
 use offline_maps_core::places::{PlacesError, SavedPlace, SavedPlaces};
@@ -34,7 +34,7 @@ use offline_maps_core::search::{SearchIndex, open_or_build, search_all};
 use offline_maps_core::store::{ActivePackage, PackageStore};
 use offline_maps_core::terrain::{
     ActiveTerrain, TERRAIN_MAX_ZOOM, TERRAIN_URL, TerrainOutcome, TerrainTiles, active_terrain,
-    prune_terrain, update_terrain,
+    has_staged_terrain, prune_terrain, update_terrain,
 };
 
 use crate::messages as pb;
@@ -499,6 +499,34 @@ impl Service {
                 })
                 .collect(),
         }
+    }
+
+    /// Find resumable data even if the client no longer remembers the download.
+    pub fn staged_downloads(&self) -> Vec<(&'static str, pb::UpdateTarget)> {
+        let mut staged = Vec::new();
+        for region in regions::ALL {
+            let id = region.id;
+            if !self.store.region_dir(id).is_dir() {
+                continue;
+            }
+            for (layer, target) in [
+                (id.to_owned(), pb::UpdateTarget::Map),
+                (extras_id(id), pb::UpdateTarget::Extras),
+                (overlays_id(id), pb::UpdateTarget::Overlays),
+            ] {
+                if self
+                    .store
+                    .read_staging(&layer)
+                    .is_some_and(|(_, bytes)| bytes > 0)
+                {
+                    staged.push((id, target));
+                }
+            }
+            if has_staged_terrain(&self.store, id) {
+                staged.push((id, pb::UpdateTarget::Terrain));
+            }
+        }
+        staged
     }
 
     pub fn status(&self) -> pb::Status {
