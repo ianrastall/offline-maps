@@ -135,6 +135,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun Screen() {
         var panel by remember { mutableStateOf<String?>(null) }
+        var more by remember { mutableStateOf(false) }
         var saveAt by remember { mutableStateOf<JSONObject?>(null) }
         var saveName by remember { mutableStateOf("") }
         var selected by remember { mutableStateOf<JSONObject?>(null) }
@@ -155,7 +156,19 @@ class MainActivity : ComponentActivity() {
                     Text("Offline Maps", Modifier.padding(12.dp), style = MaterialTheme.typography.titleMedium)
                     TextButton(onClick = { panel = "maps" }, enabled = ready) { Text("Maps") }
                     TextButton(onClick = { panel = "saved" }, enabled = ready) { Text("Saved") }
-                    TextButton(onClick = { panel = "about" }) { Text("About") }
+                    Box {
+                        TextButton(onClick = { more = true }) { Text("More") }
+                        DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
+                            DropdownMenuItem(text = { Text("Save map image") },
+                                enabled = ready && !model.savingMapImage && !model.rendererRecovering && !model.rendererRetryRequired,
+                                onClick = {
+                                    more = false
+                                    keyboard?.hide()
+                                    model.saveMapImage(window)
+                                })
+                            DropdownMenuItem(text = { Text("About") }, onClick = { more = false; panel = "about" })
+                        }
+                    }
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutlinedTextField(model.query, model::editQuery, Modifier.weight(1f),

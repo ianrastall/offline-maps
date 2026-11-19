@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.Window
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -44,6 +45,8 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     var rendererRetryRequired by mutableStateOf(false)
         private set
     var rendererRecovering by mutableStateOf(false)
+        private set
+    var savingMapImage by mutableStateOf(false)
         private set
     private var lastRendererStop: Long? = null
     var view: JSONObject? = null
@@ -126,6 +129,38 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     }
     fun rendererReady() {
         rendererRecovering = false
+    }
+
+    fun saveMapImage(window: Window) {
+        if (savingMapImage || cleared) return
+        error = null
+        notice = null
+        val map = page
+        if (map == null) {
+            error = "The map is still opening. Try again when it is visible."
+            return
+        }
+        savingMapImage = true
+        map.capture(window) { capture ->
+            capture.onFailure {
+                savingMapImage = false
+                error = it.message ?: "The map image could not be captured."
+            }.onSuccess { bitmap ->
+                if (cleared) {
+                    bitmap.recycle()
+                    return@onSuccess
+                }
+                task {
+                    try {
+                        writeMapImage(getApplication<Application>().contentResolver, bitmap)
+                        main.post { notice = "Map image saved in $MAP_IMAGE_FOLDER." }
+                    } finally {
+                        bitmap.recycle()
+                        main.post { savingMapImage = false }
+                    }
+                }
+            }
+        }
     }
     fun initMessage(): JSONObject = JSONObject(status!!.toString()).apply {
         put("kind", "init"); put("theme", "dark"); put("animate", true); put("units", "imperial")

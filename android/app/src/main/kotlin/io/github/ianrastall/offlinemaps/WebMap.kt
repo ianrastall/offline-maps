@@ -2,9 +2,15 @@ package io.github.ianrastall.offlinemaps
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.PixelCopy
+import android.view.Window
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -51,6 +57,13 @@ class WebMap(
     private var proxy: JavaScriptReplyProxy? = null
     private var started = 0L
     private val assets = context.assets
+    private val main = Handler(Looper.getMainLooper())
+    private class Snapshot(val id: Long, val window: Window, val done: (Result<Bitmap>) -> Unit)
+    private var nextSnapshotId = 0L
+    private var snapshot: Snapshot? = null
+    private val snapshotTimeout = Runnable {
+        snapshot?.let { failSnapshot(it, "The map did not finish drawing. Try again once it is still.") }
+    }
 
     init {
         addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -107,6 +120,7 @@ class WebMap(
 
     fun close() {
         if (view.parent !== this) return
+        snapshot?.let { failSnapshot(it, "The map closed before the image was captured. Try again.") }
         proxy = null
         removeView(view)
         view.destroy()
@@ -116,12 +130,92 @@ class WebMap(
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) proxy?.postMessage(message.toString())
     }
 
+    fun capture(window: Window, done: (Result<Bitmap>) -> Unit) {
+        if (snapshot != null || proxy == null || snapshotBounds() == null) {
+            done(Result.failure(IllegalStateException("The map is still opening. Try again when it is visible.")))
+            return
+        }
+        val request = Snapshot(++nextSnapshotId, window, done)
+        snapshot = request
+        main.postDelayed(snapshotTimeout, 12_000)
+        post(JSONObject().put("kind", "snapshot").put("id", request.id))
+    }
+
+    private fun snapshotReady(data: JSONObject) {
+        val request = snapshot?.takeIf { it.id == data.optLong("id", -1) } ?: return
+        if (!data.optBoolean("ready")) {
+            failSnapshot(request, "The map did not finish drawing. Try again once it is still.")
+            return
+        }
+        view.postVisualStateCallback(request.id, object : WebView.VisualStateCallback() {
+            override fun onComplete(requestId: Long) {
+                if (snapshot !== request) return
+                // The WebView state is ready for its next draw. Copy only after
+                // the window submits that frame, so the WebGL map and its credits match.
+                view.viewTreeObserver.registerFrameCommitCallback { main.post { copySnapshot(request) } }
+                view.invalidate()
+            }
+        })
+    }
+
+    private fun snapshotBounds(): Rect? {
+        if (!view.isAttachedToWindow || !view.isShown || view.width <= 0 || view.height <= 0) return null
+        val xy = IntArray(2)
+        view.getLocationInWindow(xy)
+        return Rect(xy[0], xy[1], xy[0] + view.width, xy[1] + view.height)
+    }
+
+    private fun copySnapshot(request: Snapshot) {
+        if (snapshot !== request) return
+        val bounds = snapshotBounds()
+        if (bounds == null) {
+            failSnapshot(request, "The map is no longer visible. Try saving again.")
+            return
+        }
+        val bitmap = try {
+            Bitmap.createBitmap(bounds.width(), bounds.height(), Bitmap.Config.ARGB_8888)
+        } catch (_: OutOfMemoryError) {
+            failSnapshot(request, "There is too little memory to capture the map image.")
+            return
+        }
+        try {
+            PixelCopy.request(request.window, Rect(bounds), bitmap, { result ->
+                when {
+                    snapshot !== request -> bitmap.recycle()
+                    result != PixelCopy.SUCCESS -> {
+                        bitmap.recycle()
+                        failSnapshot(request, "Android could not capture the map. Try again when it is visible.")
+                    }
+                    snapshotBounds() != bounds -> {
+                        bitmap.recycle()
+                        failSnapshot(request, "The map changed size. Try saving again.")
+                    }
+                    else -> finishSnapshot(request, Result.success(bitmap))
+                }
+            }, main)
+        } catch (_: IllegalArgumentException) {
+            bitmap.recycle()
+            failSnapshot(request, "The map is no longer visible. Try saving again.")
+        }
+    }
+
+    private fun failSnapshot(request: Snapshot, message: String) =
+        finishSnapshot(request, Result.failure(IllegalStateException(message)))
+
+    private fun finishSnapshot(request: Snapshot, result: Result<Bitmap>) {
+        if (snapshot !== request) return
+        snapshot = null
+        main.removeCallbacks(snapshotTimeout)
+        request.done(result)
+    }
+
     private fun received(message: WebMessageCompat) {
         val data = runCatching { JSONObject(message.data ?: return) }.getOrNull() ?: return
         when (data.optString("kind")) {
             "ready" -> post(init())
             "view" -> listener.onView(data.getDouble("latitude"), data.getDouble("longitude"), data.getDouble("zoom"))
             "idle" -> listener.onIdle(SystemClock.elapsedRealtime() - started)
+            "snapshotReady" -> snapshotReady(data)
             "error" -> listener.onError(data.optString("message"))
             "gesture" -> listener.onGesture()
             "contextmenu" -> listener.onSave(data.getDouble("latitude"), data.getDouble("longitude"))
