@@ -96,7 +96,7 @@ The first command builds the app for development. The release script runs format
 
 ### Build Android
 
-Use the `android-v0.6.0` tag to reproduce the published preview.
+Use the `android-v0.6.1` tag to reproduce the published preview.
 
 On Windows, set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to the Android SDK. Install SDK platform 36, build tools 36.1.0, NDK `30.0.16248370`, Python 3 and `cargo-ndk`. Prepare the renderer assets, then run these commands from the repository root.
 

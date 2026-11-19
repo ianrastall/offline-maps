@@ -169,3 +169,11 @@ On 19 November 2026, the signed APK upgraded 0.5.0 in place on the Galaxy S26 FE
 With Wi-Fi only enabled, the phone downloaded and indexed Wisconsin's 357.4 MB road map in roughly four minutes. Android reported the screen asleep with Always On Display active. The ready-offline notification appeared while the phone was still asleep, and the foreground service stopped and released its wake lock. The phone was charging over USB and Android's device-idle state stayed active.
 
 After unlocking, the app showed Wisconsin's installed map dated 19 November. With airplane mode enabled and no active default network, the offline search found Madison as a state capital. Selecting it drew roads, a U.S. Route 12 shield, place labels, scale and attribution from the installed map. Battery-powered Doze, longer battery tests and cold GPS acquisition after prolonged offline use remain open.
+
+## Android 0.6.1
+
+Editing the offline search field clears the previous results and any no-results message. A search that finishes after the query changes cannot restore its old results. Debug build and lint, signed release build and the GPS marker regression passed. The Android 16 emulator verified editing, submitting a revised query and opening its result with no active network.
+
+On the Galaxy S26 FE, the signed 0.6.1 APK upgraded 0.6.0 in place. All six installed regions retained their listed dates and layers, and saved-place exports were byte-identical. In airplane mode with no active network, searching for Madison returned the state capital. Editing the query hid those results, and searching for Madison again opened the local Wisconsin map.
+
+Published 19 November 2026 as the [android-v0.6.1 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.6.1) from `588fc5c3f24f0b0902ac62f7137bbe8d2bb10d01`. The signed APK is 128,370,499 bytes and uses the same certificate as 0.6.0. Its SHA-256, `b20821f9b24733a025e6252002b3f66a66a4652b53139e0629b74fd58a6a8613`, matched the installed APK and the published GitHub asset.
