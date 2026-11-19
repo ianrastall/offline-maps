@@ -35,12 +35,20 @@ class RegionDownloads(
     private val context: Context,
     private val getCore: () -> CoreStore?,
     private val changed: () -> Unit,
+    private val backupDownload: (String, AtomicBoolean, () -> Unit) -> Boolean,
 ) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
     private val preferences = context.getSharedPreferences("downloads", 0)
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
-    private data class Job(val request: DownloadRequest, val network: Network, var started: Boolean = false, val cancelled: AtomicBoolean = AtomicBoolean(false), var pauseReason: String = "Download paused. Choose Resume to continue.")
+    private data class Job(
+        val request: DownloadRequest,
+        val network: Network,
+        var started: Boolean = false,
+        val cancelled: AtomicBoolean = AtomicBoolean(false),
+        val backingUp: AtomicBoolean = AtomicBoolean(false),
+        var pauseReason: String = "Download paused. Choose Resume to continue.",
+    )
     private var job: Job? = null
     private var foreground = false
     var active by mutableStateOf(false)
@@ -154,6 +162,9 @@ class RegionDownloads(
             }.getOrNull()?.let { progress ->
                 if (current.cancelled.get()) {
                     message = "Pausing download…"
+                } else if (current.backingUp.get()) {
+                    message = "Saving the map backup…"
+                    fraction = null
                 } else if (progress.optBoolean("active")) {
                     val done = progress.optLong("done")
                     val total = progress.optLong("total")
@@ -221,6 +232,11 @@ class RegionDownloads(
             // Cancellation can arrive just as atomic activation completes. Report
             // successful activation as success rather than a fictitious pause.
             val refreshFailure = if (result.isSuccess) runCatching(changed).exceptionOrNull() else null
+            val backup = if (result.isSuccess) runCatching {
+                backupDownload(request.region, current.cancelled) {
+                    current.backingUp.set(true)
+                }
+            } else Result.success(false)
             val remaining = queued - request
             val completionRecorded = result.isSuccess && runCatching { writePending(remaining) }.getOrDefault(false)
             main.post {
@@ -231,7 +247,9 @@ class RegionDownloads(
                     if (completionRecorded) pending = remaining
                     notice = when {
                         !completionRecorded -> "The file is ready. The unfinished download list could not be saved."
+                        backup.isFailure -> "The map is ready offline. Its backup could not finish. Open Maps to back it up."
                         refreshFailure != null -> "The file is ready. Reopen Offline Maps to refresh the display."
+                        backup.getOrDefault(false) -> "The download is ready offline and backed up."
                         data.optBoolean("upToDate") -> "The installed file is up to date."
                         else -> "The download is ready offline."
                     }

@@ -9,13 +9,13 @@ use std::sync::atomic::AtomicBool;
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 
-use crate::extras::{active_extras, open_entries};
+use crate::extras::{ActiveExtras, active_extras, open_entries};
 use crate::mbtiles::PackageError;
-use crate::overlays::{active_overlays, verify_overlays};
+use crate::overlays::{ActiveOverlays, active_overlays, verify_overlays};
 use crate::package::{sha256_file, verify_package};
 use crate::search::SearchIndex;
-use crate::store::PackageStore;
-use crate::terrain::{TerrainTiles, active_terrain};
+use crate::store::{ActivePackage, PackageStore};
+use crate::terrain::{ActiveTerrain, TerrainTiles, active_terrain};
 
 pub const MANIFEST: &str = "transfer.json";
 
@@ -95,6 +95,85 @@ fn integrity(path: &Path) -> Result<(), PackageError> {
     Ok(())
 }
 
+struct RegionFiles {
+    map: ActivePackage,
+    extras: Option<ActiveExtras>,
+    terrain: Option<ActiveTerrain>,
+    overlays: Option<ActiveOverlays>,
+}
+
+impl RegionFiles {
+    fn open(store: &PackageStore, id: &str) -> Result<Self, PackageError> {
+        Ok(Self {
+            map: store.active(id)?.ok_or_else(|| invalid("No active map."))?,
+            extras: active_extras(store, id)?,
+            terrain: active_terrain(store, id)?,
+            overlays: active_overlays(store, id)?,
+        })
+    }
+
+    fn paths(&self, store: &PackageStore, id: &str) -> Vec<PathBuf> {
+        let region = store.region_dir(id);
+        let mut paths = vec![
+            region.join("active.json"),
+            self.map.path.clone(),
+            self.map.path.with_file_name("record.json"),
+            self.map.search_index_path(),
+        ];
+        for (layer, file) in [
+            ("extras", self.extras.as_ref().map(|e| &e.path)),
+            ("terrain", self.terrain.as_ref().map(|t| &t.path)),
+            ("overlays", self.overlays.as_ref().map(|o| &o.path)),
+        ] {
+            if let Some(file) = file {
+                paths.extend([
+                    region.join(layer).join("active.json"),
+                    file.with_file_name("record.json"),
+                    file.clone(),
+                ]);
+            }
+        }
+        paths
+    }
+}
+
+fn relative_name(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root)
+        .expect("store path")
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+/// Describe the files in one installed region. The caller keeps updates
+/// blocked until it has checked every exported file against this manifest.
+pub fn describe_export(
+    store: &PackageStore,
+    id: &str,
+    cancelled: &AtomicBool,
+) -> Result<Transfer, PackageError> {
+    if crate::regions::find(id).is_none() {
+        return Err(invalid("Unknown map region."));
+    }
+    let mut files = BTreeMap::new();
+    let active = RegionFiles::open(store, id)?;
+    for file in active.paths(store, id) {
+        let name = relative_name(store.root(), &file);
+        let (sha256, bytes) = sha256_file(&regular(store.root(), &name)?, cancelled)?;
+        if bytes == 0 {
+            return Err(invalid(format!("{name} is empty.")));
+        }
+        if file == active.map.path && sha256 != active.map.record.sha256 {
+            return Err(invalid("The installed map failed its checksum."));
+        }
+        files.insert(name, FileRecord { bytes, sha256 });
+    }
+    Ok(Transfer {
+        schema: 1,
+        region: id.into(),
+        files,
+    })
+}
+
 /// Checks checksums, coverage, formats, search/package association and every
 /// optional layer before returning the prepared region's ID. Nothing is changed.
 pub fn verify(root: &Path, cancelled: &AtomicBool) -> Result<String, PackageError> {
@@ -112,7 +191,8 @@ pub fn verify(root: &Path, cancelled: &AtomicBool) -> Result<String, PackageErro
     let store = PackageStore::new(root);
     let id = manifest.region.as_str();
     let region = crate::regions::find(id).expect("validated region");
-    let active = store.active(id)?.ok_or_else(|| invalid("No active map."))?;
+    let region_files = RegionFiles::open(&store, id)?;
+    let active = &region_files.map;
     let record = verify_package(
         &active.path,
         region,
@@ -127,26 +207,15 @@ pub fn verify(root: &Path, cancelled: &AtomicBool) -> Result<String, PackageErro
     {
         return Err(invalid("The map does not match its desktop record."));
     }
-    let mut expected = vec![
-        store.region_dir(id).join("active.json"),
-        active.path.clone(),
-        active.path.with_file_name("record.json"),
-        active.search_index_path(),
-    ];
     integrity(&active.search_index_path())?;
     let mut search = SearchIndex::open(&active.search_index_path(), &record.sha256)?;
     search.stats()?;
-    if let Some(extra) = active_extras(&store, id)? {
+    if let Some(extra) = &region_files.extras {
         integrity(&extra.path)?;
         open_entries(&extra.path)?;
         search.attach_extras(&extra.path)?;
-        expected.extend([
-            store.region_dir(id).join("extras/active.json"),
-            extra.path.with_file_name("record.json"),
-            extra.path,
-        ]);
     }
-    if let Some(terrain) = active_terrain(&store, id)? {
+    if let Some(terrain) = &region_files.terrain {
         integrity(&terrain.path)?;
         if terrain.record.max_zoom > crate::terrain::TERRAIN_MAX_ZOOM
             || !region.outer.contains(&terrain.record.bounds)
@@ -154,31 +223,17 @@ pub fn verify(root: &Path, cancelled: &AtomicBool) -> Result<String, PackageErro
             return Err(invalid("The terrain has invalid coverage or zooms."));
         }
         TerrainTiles::open(&terrain.path)?.tile(0, 0, 0)?;
-        expected.extend([
-            store.region_dir(id).join("terrain/active.json"),
-            terrain.path.with_file_name("record.json"),
-            terrain.path,
-        ]);
     }
-    if let Some(overlays) = active_overlays(&store, id)? {
+    if let Some(overlays) = &region_files.overlays {
         verify_overlays(&overlays.path, region)?;
         if sha256_file(&overlays.path, cancelled)?.0 != overlays.record.sha256 {
             return Err(invalid("The overlays do not match their desktop record."));
         }
-        expected.extend([
-            store.region_dir(id).join("overlays/active.json"),
-            overlays.path.with_file_name("record.json"),
-            overlays.path,
-        ]);
     }
-    let mut names: Vec<_> = expected
+    let mut names: Vec<_> = region_files
+        .paths(&store, id)
         .iter()
-        .map(|p| {
-            p.strip_prefix(root)
-                .expect("store path")
-                .to_string_lossy()
-                .replace('\\', "/")
-        })
+        .map(|p| relative_name(root, p))
         .collect();
     names.sort();
     if names != manifest.files.keys().cloned().collect::<Vec<_>>() {
@@ -378,6 +433,25 @@ pub(crate) mod tests {
         assert!(store.active("us-il").unwrap().is_some());
         assert!(install(&store, &source.0, &AtomicBool::new(false)).is_err());
         assert!(store.active("us-il").unwrap().is_some());
+    }
+
+    #[test]
+    fn describes_a_restore_ready_copy_and_rejects_a_changed_map() {
+        let source = TempDir::new();
+        prepared(&source.0);
+        let store = PackageStore::new(&source.0);
+        let running = AtomicBool::new(false);
+        let manifest = describe_export(&store, "us-il", &running).unwrap();
+        assert_eq!(
+            serde_json::to_value(manifest).unwrap(),
+            serde_json::to_value(Transfer::read(&source.0).unwrap()).unwrap()
+        );
+        let map = store.active("us-il").unwrap().unwrap().path;
+        let mut bytes = fs::read(&map).unwrap();
+        let changed = bytes.last_mut().unwrap();
+        *changed ^= 1;
+        fs::write(&map, bytes).unwrap();
+        assert!(describe_export(&store, "us-il", &running).is_err());
     }
     #[test]
     fn cancellation_leaves_no_active_region() {

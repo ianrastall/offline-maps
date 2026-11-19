@@ -10,15 +10,22 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** SAF reads only the folder selected by the user. Partial copies remain outside active regions. */
-class MapImport(private val context: Context, private val core: CoreStore) {
-    val cancelled = AtomicBoolean(false)
-    private fun checkCancelled() { check(!cancelled.get()) { "Import cancelled." } }
+class MapImport(
+    private val context: Context,
+    private val core: CoreStore,
+    val cancelled: AtomicBoolean = AtomicBoolean(false),
+) {
+    internal fun checkCancelled() { check(!cancelled.get()) { "Map operation cancelled." } }
 
     class Staged(val directory: File, val review: JSONObject) : AutoCloseable {
         override fun close() { directory.deleteRecursively() }
     }
 
-    fun stage(tree: Uri, progress: (String) -> Unit): Staged {
+    fun stage(
+        tree: Uri,
+        rootId: String = DocumentsContract.getTreeDocumentId(tree),
+        progress: (String) -> Unit,
+    ): Staged {
         val cache = mutableMapOf<String, Map<String, String>>()
         fun children(id: String): Map<String, String> = cache.getOrPut(id) {
             val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, id)
@@ -28,7 +35,7 @@ class MapImport(private val context: Context, private val core: CoreStore) {
             } ?: error("The selected folder could not be read.")
         }
         fun document(path: String): Uri {
-            var id = DocumentsContract.getTreeDocumentId(tree)
+            var id = rootId
             for (part in path.split('/')) id = children(id)[part] ?: error("Missing transfer file: $path")
             return DocumentsContract.buildDocumentUriUsingTree(tree, id)
         }

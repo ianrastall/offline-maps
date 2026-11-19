@@ -1,6 +1,8 @@
 package io.github.ianrastall.offlinemaps
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
@@ -8,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import java.io.File
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicBoolean
 
 class OfflineMapsApplication : Application() {
     val session by lazy { MapSession(this) }
@@ -21,7 +24,45 @@ class MapSession(private val app: Application) {
     private var importOwner: Any? = null
     var importing by mutableStateOf(false)
         private set
-    val downloads = RegionDownloads(app, { core }, { changed() })
+    private val backup = app.getSharedPreferences("map-backup", 0)
+    var backupEnabled by mutableStateOf(backup.contains("tree") && backup.contains("root"))
+        private set
+    val downloads = RegionDownloads(app, { core }, { changed() }, ::backupDownload)
+
+    fun linkBackup(tree: Uri, rootId: String): Boolean {
+        val previous = backup.getString("tree", null)
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        val linked = runCatching {
+            app.contentResolver.takePersistableUriPermission(tree, flags)
+            backup.edit().putString("tree", tree.toString()).putString("root", rootId).commit()
+        }.getOrDefault(false)
+        if (linked) {
+            backupEnabled = true
+            if (previous != null && previous != tree.toString()) {
+                runCatching { app.contentResolver.releasePersistableUriPermission(Uri.parse(previous), flags) }
+            }
+        }
+        return linked
+    }
+
+    fun stopBackups() {
+        val tree = backup.getString("tree", null)
+        backup.edit().clear().apply()
+        backupEnabled = false
+        if (tree != null) {
+            val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            runCatching { app.contentResolver.releasePersistableUriPermission(Uri.parse(tree), flags) }
+        }
+    }
+
+    private fun backupDownload(region: String, cancelled: AtomicBoolean, progress: () -> Unit): Boolean {
+        val current = core ?: return false
+        val tree = backup.getString("tree", null)?.let(Uri::parse) ?: return false
+        val root = backup.getString("root", null) ?: return false
+        progress()
+        MapLibrary(app, current, MapImport(app, current, cancelled)).backupDownload(tree, root, region)
+        return true
+    }
 
     fun claimImport(owner: Any): Boolean {
         if (importOwner != null) return false

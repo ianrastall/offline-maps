@@ -144,6 +144,12 @@ class MainActivity : ComponentActivity() {
         val picker = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) model.importMap(uri)
         }
+        val backupPicker = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) model.backupMapLibrary(uri)
+        }
+        val restorePicker = androidx.activity.compose.rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) model.restoreMapLibrary(uri)
+        }
         val ready = model.status != null
         val current = currentFix()
         SideEffect {
@@ -277,6 +283,13 @@ class MainActivity : ComponentActivity() {
                             Modifier.fillMaxWidth().clickable { downloadRegion = region.getString("id"); panel = "downloads" }.padding(vertical = 6.dp))
                     }
                     TextButton(onClick = { panel = null; picker.launch(null) }, enabled = !model.hasWork) { Text("Import map folder") }
+                    TextButton(onClick = { panel = null; restorePicker.launch(null) }, enabled = !model.hasWork) { Text("Restore map library") }
+                    Text("Choose a folder in Documents or on an SD card. The app copies future downloads to that backup.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { panel = null; backupPicker.launch(null) },
+                        enabled = !model.hasWork) { Text("Back up maps and places") }
+                    if (model.mapBackupEnabled) {
+                        TextButton(onClick = model::stopMapBackups, enabled = !model.hasWork) { Text("Stop automatic map backups") }
+                    }
                     Row { Checkbox(model.layers, { model.toggleLayers(it) }); Text("Show optional map layers", Modifier.padding(top = 12.dp)) }
                 }
             }, confirmButton = { TextButton(onClick = { downloadRegion = null; panel = "downloads" }) { Text("Download maps") } },

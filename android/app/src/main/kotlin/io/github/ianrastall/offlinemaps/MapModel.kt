@@ -295,6 +295,46 @@ class MapModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun backupMapLibrary(tree: Uri) = mapLibraryWork(tree, restoring = false)
+
+    fun restoreMapLibrary(tree: Uri) = mapLibraryWork(tree, restoring = true)
+
+    val mapBackupEnabled: Boolean get() = session.backupEnabled
+    fun stopMapBackups() {
+        if (!hasWork) session.stopBackups()
+    }
+
+    private fun mapLibraryWork(tree: Uri, restoring: Boolean) {
+        val current = core ?: return
+        if (hasWork || !session.claimImport(this)) return
+        busy = if (restoring) "Reading map library…" else "Preparing map backup…"
+        error = null
+        notice = null
+        val operation = MapImport(getApplication(), current).also { importer = it }
+        val library = MapLibrary(getApplication(), current, operation)
+        task(clearBusy = true, executor = importWorker) {
+            try {
+                val progress: (String) -> Unit = { phase -> main.post { busy = phase } }
+                if (restoring) {
+                    val message = library.restore(tree, progress)
+                    main.post { notice = message }
+                } else {
+                    val finished = library.backup(tree, progress)
+                    main.post {
+                        val linked = session.linkBackup(tree, finished.rootId)
+                        notice = finished.message + if (linked) " Future downloads will be backed up there."
+                            else " Automatic backups could not be enabled for this folder."
+                    }
+                }
+            } finally {
+                if (restoring) session.changed()
+                importer = null
+                main.removeCallbacks(importCancelPoll)
+                session.releaseImport(this)
+            }
+        }
+    }
     fun discardTransfer() {
         if (busy != null) { cancelImport(); return }
         transferReview = null

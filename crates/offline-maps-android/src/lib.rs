@@ -393,6 +393,24 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_imp
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_describeExport<
+    'local,
+>(
+    mut unowned: EnvUnowned<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    id: JString<'local>,
+) -> JObject<'local> {
+    unowned
+        .with_env(|env| -> Result<JObject<'local>> {
+            let id = id.try_to_string(env)?;
+            let manifest = unsafe { service(handle) }?.describe_export(&id)?;
+            text(env, &json!(manifest).to_string())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_previewTransfer<
     'local,
 >(

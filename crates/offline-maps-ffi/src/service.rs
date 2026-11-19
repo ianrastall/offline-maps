@@ -1393,6 +1393,13 @@ impl Service {
         ))
     }
 
+    pub fn describe_export(&self, id: &str) -> Outcome<offline_maps_core::transfer::Transfer> {
+        let region = self.region(id)?;
+        let _busy = self.begin(pb::UpdateTarget::Map, Some(&region))?;
+        offline_maps_core::transfer::describe_export(&self.store, region.id, &self.cancel)
+            .map_err(|e| error(ErrorKind::InvalidData, e.to_string()))
+    }
+
     /// Applies a verified transfer, journaling all provided map/layer pointers.
     pub fn import_transfer(&self, staged: &Path, replace: bool) -> Outcome<String> {
         let _busy = self.begin(pb::UpdateTarget::Map, None)?;
