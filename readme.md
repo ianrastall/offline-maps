@@ -6,8 +6,8 @@ Download detailed road maps for Windows or Android and use them without an inter
 
 | Platform | Download | First map |
 | --- | --- | --- |
-| Windows 11 24H2 or later, x64 | [Windows 0.21.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.21.0) | Run `OfflineMaps-0.21.0-win-x64-setup.exe`, then open **Offline Maps** from Start. Choose **Map > Regions…**, select a region and click **Download map**. |
-| Android 10 or later, arm64 or x86-64 | [Android 0.10.0 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.10.0) | Open `OfflineMaps-android-0.10.0-release.apk` and install it over any existing preview. Choose **Maps > Download maps** to download a region. |
+| Windows 11 24H2 or later, x64 | [Windows 0.22.0](https://github.com/ianrastall/offline-maps/releases/tag/v0.22.0) | Run `OfflineMaps-0.22.0-win-x64-setup.exe`, then open **Offline Maps** from Start. Choose **Map > Regions…**, select a region and click **Download map**. |
+| Android 10 or later, arm64 or x86-64 | [Android 0.11.0 preview](https://github.com/ianrastall/offline-maps/releases/tag/android-v0.11.0) | Open `OfflineMaps-android-0.11.0-release.apk` and install it over the existing release preview. Choose **Maps > Download maps** to download a region. |
 
 To start with prepared maps on Android, unzip the Delaware and D.C. starter library and select the extracted folder in **Maps > Restore map library**. To keep installed maps through a reinstall, set up a shared backup in **Maps > Map backup**. [Starter library ZIP](https://github.com/ianrastall/offline-maps/releases/download/android-v0.9.0/OfflineMaps-Starter-Delaware-DC.zip) · [Backup and restore guide](GUIDE.md#keep-and-back-up-maps-and-saved-places)
 
