@@ -166,7 +166,7 @@ public sealed partial class MainWindow : Window
         RegionsItem.IsEnabled = connected;
         SearchBox.IsEnabled = connected;
         bool hasMap = status.Coverage is not null;
-        bool busy = _update is not null;
+        bool busy = _update is not null || _queueRun is not null;
         var missingExtras = status.Regions.Where(r => r.Map is not null && r.Extras is null).Select(r => r.Name).ToList();
         var oldExtras = status.Regions.Where(r => r.Extras is { Outdoor: false }).Select(r => r.Name).ToList();
         NoMapBar.IsOpen = connected && !hasMap && !busy && _queue.Count == 0;
@@ -530,30 +530,34 @@ public sealed partial class MainWindow : Window
         _ = CloseSafelyAsync();
     }
 
+    private bool _confirmingClose;
+
     /// <summary>
     /// Shutdown: stop a running download (its partial file is kept for resuming), save the
     /// view and settings, close the web view, then release the core.
     /// </summary>
     private async Task CloseSafelyAsync()
     {
-        if (_closing)
+        if (_closing || _confirmingClose)
         {
             return;
         }
-        _closing = true;
+        _confirmingClose = true;
         try
         {
-            if (_update is { } update)
+            if (_queueRun is not null || _update is not null)
             {
                 bool checking = _checkingUpdates is not null;
                 var answer = await ShowDialogAsync(new ContentDialog
                 {
                     Title = checking ? "Stop checking for updates and close?"
                         : IsExportingLibrary ? "Stop exporting maps and close?"
+                        : IsBulkDownloading ? "Stop the bulk download and close?"
                         : _movingFrom is null ? "Stop the download and close?" : "Stop moving the maps and close?",
                     Content = Text(checking ? "The remaining checks will be canceled." : IsExportingLibrary
-                        ? "The unfinished library will be removed." : _movingFrom is null
-                        ? "What has been downloaded is kept, and the download continues from there next time."
+                        ? "The unfinished library will be removed." : IsBulkDownloading
+                        ? "Completed downloads stay installed. Choose the same scope in Bulk download to continue where you left off."
+                        : _movingFrom is null ? "What has been downloaded is kept, and the download continues from there next time."
                         : $"The maps stay in {_movingFrom}, and what was copied so far is removed."),
                     PrimaryButtonText = "Stop and close",
                     CloseButtonText = "Cancel",
@@ -561,12 +565,14 @@ public sealed partial class MainWindow : Window
                 });
                 if (answer != ContentDialogResult.Primary)
                 {
-                    _closing = false;
-                    UpdateMapCommands();
                     return;
                 }
+            }
+            _closing = true;
+            if ((_queueRun ?? _update) is { } update)
+            {
                 _checkingUpdates?.Cancel();
-                _core?.Cancel();
+                CancelQueue();
                 try
                 {
                     await update;
@@ -588,6 +594,10 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             AppLog.Write($"Closing failed: {ex}");
+        }
+        finally
+        {
+            _confirmingClose = false;
         }
         _allowClose = true;
         Close();

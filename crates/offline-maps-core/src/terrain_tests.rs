@@ -277,6 +277,42 @@ fn cancelling_keeps_progress_for_next_time() {
 }
 
 #[test]
+fn resuming_terrain_checks_space_only_for_missing_tiles() {
+    let dir = TempDir::new();
+    let store = PackageStore::new(&dir.0);
+    let server = Server::new(1);
+    let cancelled = AtomicBool::new(false);
+    let error = run_with(&store, &server, &cancelled, &mut |p| {
+        if matches!(p, Progress::Downloading { received, total: Some(total) } if received == total)
+        {
+            cancelled.store(true, Ordering::SeqCst);
+        }
+    })
+    .unwrap_err();
+    assert!(matches!(error, UpdateError::Cancelled));
+
+    let options = UpdateOptions {
+        available_space: |_| Ok(256 << 20),
+        reserve_bytes: 256 << 20,
+        ..options()
+    };
+    let outcome = update_terrain(
+        &store,
+        &ILLINOIS,
+        AREA,
+        URL,
+        2,
+        &server,
+        &options,
+        &mut |_| {},
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert!(matches!(outcome, TerrainOutcome::Activated { .. }));
+    assert_eq!(server.requests.load(Ordering::SeqCst), 5);
+}
+
+#[test]
 fn tile_ranges_cover_the_area() {
     assert_eq!(tile_range(0, &AREA), (0, 0, 0, 0));
     assert_eq!(tile_range(2, &AREA), (0, 1, 1, 1));

@@ -16,6 +16,12 @@ public sealed partial class MainWindow
     internal sealed record Job(string RegionId, UpdateTarget Target);
 
     private readonly List<Job> _queue = [];
+    private Task? _queueRun;
+    private bool _queueCancelled;
+    private string? _bulkScope;
+    private int _bulkTotal;
+    private int _bulkCompleted;
+    private string? _bulkFailure;
     private Task? _update;
     private CancellationTokenSource? _checkingUpdates;
     private Job? _current;
@@ -34,9 +40,13 @@ public sealed partial class MainWindow
     internal string ProgressText { get; private set; } = "";
 
     internal bool IsQueued(string regionId, UpdateTarget target) => _queue.Contains(new Job(regionId, target));
+    internal IEnumerable<string> QueuedRegionIds => _queue.Select(job => job.RegionId);
 
-    internal bool IsBusy => _update is not null || _openingMapFolder;
+    internal bool IsBusy => _update is not null || _queueRun is not null || _openingMapFolder;
     internal bool IsCheckingUpdates => _checkingUpdates is not null;
+    internal bool IsBulkDownloading => _bulkScope is not null;
+    internal bool CanCancelBulk => IsBulkDownloading && !_queueCancelled;
+    internal string BulkStatus { get; private set; } = "";
 
     internal string RegionName(string id) => _catalog.FirstOrDefault(r => r.Id == id)?.Name ?? id;
 
@@ -71,7 +81,7 @@ public sealed partial class MainWindow
     /// <summary>Adds a download or update to the queue and starts the queue if it is idle.</summary>
     internal void Enqueue(string regionId, UpdateTarget target)
     {
-        if (_openingMapFolder || _closing || IsCheckingUpdates || IsExportingLibrary)
+        if (_openingMapFolder || _closing || IsCheckingUpdates || IsExportingLibrary || IsBulkDownloading || _queueCancelled)
         {
             return;
         }
@@ -82,7 +92,58 @@ public sealed partial class MainWindow
         }
         _queue.Add(job);
         RegionsChanged?.Invoke();
-        _ = RunQueueAsync();
+        StartQueue();
+    }
+
+    internal sealed record BulkDownload(Job Job, ulong Bytes);
+
+    internal IReadOnlyList<BulkDownload> PlanBulkDownload(string? country)
+    {
+        var installed = (_status?.Regions ?? []).ToDictionary(r => r.Id);
+        var regions = _catalog.Where(r => country is null || r.Country == country).ToList();
+        var plan = new List<BulkDownload>();
+        UpdateTarget[] layers = [UpdateTarget.Map, UpdateTarget.Extras, UpdateTarget.Overlays, UpdateTarget.Terrain];
+        foreach (UpdateTarget layer in layers)
+        {
+            foreach (var region in regions)
+            {
+                installed.TryGetValue(region.Id, out var existing);
+                ulong bytes = layer switch
+                {
+                    UpdateTarget.Map when existing?.Map is null => region.PackageBytes,
+                    UpdateTarget.Extras when existing?.Extras is null => ExtrasDownloadBytes(region),
+                    UpdateTarget.Overlays when existing?.Overlays is null => region.OverlayBytes,
+                    UpdateTarget.Terrain when existing?.Terrain is null => region.TerrainBytes,
+                    _ => 0,
+                };
+                if (bytes > 0 && (layer == UpdateTarget.Map || existing?.Map is not null || region.PackageBytes > 0))
+                {
+                    plan.Add(new BulkDownload(new Job(region.Id, layer), bytes));
+                }
+            }
+        }
+        return plan;
+    }
+
+    internal void StartBulkDownload(string? country)
+    {
+        if (IsBusy || _closing || _core is null)
+        {
+            return;
+        }
+        var plan = PlanBulkDownload(country);
+        if (plan.Count == 0)
+        {
+            return;
+        }
+        _bulkScope = country ?? "All regions";
+        _bulkTotal = plan.Count;
+        _bulkCompleted = 0;
+        _bulkFailure = null;
+        BulkStatus = $"{_bulkScope} · 0 of {_bulkTotal} downloads complete";
+        _queue.AddRange(plan.Select(item => item.Job));
+        StartQueue();
+        RegionsChanged?.Invoke();
     }
 
     /// <summary>What a check for updates found for one installed item.</summary>
@@ -363,7 +424,7 @@ public sealed partial class MainWindow
     /// <summary>Asks, then removes a region's map, stations and addresses.</summary>
     internal async Task RemoveRegionAsync(string regionId, XamlRoot root)
     {
-        if (_core is not { } core || _update is not null)
+        if (_core is not { } core || IsBusy)
         {
             return;
         }
@@ -391,7 +452,7 @@ public sealed partial class MainWindow
         {
             return;
         }
-        if (_update is not null)
+        if (IsBusy)
         {
             return;
         }
@@ -424,16 +485,17 @@ public sealed partial class MainWindow
             await RunSearchAsync();
         }
         RegionsChanged?.Invoke();
-        _ = RunQueueAsync();
+        StartQueue();
     }
 
-    private void CancelUpdate_Click(object sender, RoutedEventArgs e)
+    private void CancelUpdate_Click(object sender, RoutedEventArgs e) => CancelUpdate();
+
+    private void CancelUpdate()
     {
-        if (_update is not null)
+        if (_update is not null || _queueRun is not null)
         {
-            _queue.Clear();
+            CancelQueue();
             _checkingUpdates?.Cancel();
-            _core?.Cancel();
             CancelButton.IsEnabled = false;
             CancelUpdateItem.IsEnabled = false;
             if (_checkingUpdates is not null)
@@ -445,6 +507,22 @@ public sealed partial class MainWindow
                 ShowProgress();
             }
         }
+    }
+
+    internal void CancelBulkDownload()
+    {
+        if (CanCancelBulk)
+        {
+            CancelUpdate();
+        }
+    }
+
+    private void CancelQueue()
+    {
+        _queueCancelled = _queueRun is not null;
+        _queue.Clear();
+        _core?.Cancel();
+        RegionsChanged?.Invoke();
     }
 
     private void ExtrasBar_Closed(InfoBar sender, InfoBarClosedEventArgs args)
@@ -472,16 +550,20 @@ public sealed partial class MainWindow
         _ => $"{RegionName(job.RegionId)} stations and addresses",
     };
 
-    /// <summary>Runs queued jobs until the queue is empty.</summary>
+    private void StartQueue()
+    {
+        if (_core is not null && !IsBusy && !_closing && _queue.Count > 0)
+        {
+            _queueRun = RunQueueAsync();
+        }
+    }
+
+    /// <summary>Owns the queue between transfers, including while the installed map status refreshes.</summary>
     private async Task RunQueueAsync()
     {
-        if (_core is null || IsBusy || _closing || _queue.Count == 0)
-        {
-            return;
-        }
+        await Task.Yield();
         var messages = new List<string>();
-        bool cancelled = false;
-        while (!_closing && _queue.Count > 0 && _core is { } core)
+        while (!_queueCancelled && _queue.Count > 0 && _core is { } core)
         {
             var job = _queue[0];
             _queue.RemoveAt(0);
@@ -493,7 +575,6 @@ public sealed partial class MainWindow
             }));
             if (message is null)
             {
-                cancelled = true;
                 break;
             }
             // Downloaded, or found to be current: either way it is now the newest version.
@@ -502,16 +583,42 @@ public sealed partial class MainWindow
                 _checks[job] = new Check(false, "", 0);
             }
             messages.Add(message);
+            _bulkCompleted = messages.Count;
+            if (_bulkScope is { } scope)
+            {
+                BulkStatus = $"{scope} · {_bulkCompleted} of {_bulkTotal} downloads complete";
+            }
             await RefreshStatusAsync();
         }
-        await FinishAsync(cancelled
-            ? "Cancelled. What was downloaded is kept, and the download continues from there next time."
-            : messages.Count == 1 ? messages[0] : $"Completed {messages.Count} downloads and updates");
+        bool cancelled = _queueCancelled;
+        string summary = messages.Count == 1 ? messages[0] : $"Completed {messages.Count} downloads and updates";
+        if (_bulkScope is { } finishedScope)
+        {
+            string state = cancelled ? "cancelled" : _bulkCompleted < _bulkTotal ? "stopped" : "complete";
+            string retry = state == "complete" ? "" : " · Choose Bulk download to continue";
+            summary = BulkStatus = $"{finishedScope} · Bulk download {state} · {_bulkCompleted} of {_bulkTotal} complete{retry}";
+            if (_bulkFailure is { } detail)
+            {
+                BulkStatus += $"\n{detail}";
+            }
+        }
+        else if (cancelled)
+        {
+            summary = "Cancelled. The unfinished download can be resumed next time.";
+        }
+        _queue.Clear();
+        _queueCancelled = false;
+        _bulkScope = null;
+        _queueRun = null;
+        if (!_closing)
+        {
+            await FinishAsync(summary);
+        }
     }
 
     private async Task PrepareSearchAsync()
     {
-        if (_core is not { } core || _update is not null)
+        if (_core is not { } core || IsBusy)
         {
             return;
         }
@@ -535,7 +642,7 @@ public sealed partial class MainWindow
         ProgressText = "Running";
         UpdateProgress.IsIndeterminate = true;
         CancelButton.IsEnabled = true;
-        CancelButton.Content = job is null ? "Cancel" : "Cancel download";
+        CancelButton.Content = IsBulkDownloading ? "Cancel bulk download" : job is null ? "Cancel" : "Cancel download";
         UpdateBar.IsOpen = true;
         CancelUpdateItem.IsEnabled = true;
         UpdateAllItem.IsEnabled = false;
@@ -556,6 +663,10 @@ public sealed partial class MainWindow
         {
             AppLog.Write($"{title} failed: {ex.Kind} {ex.Message}");
             _queue.Clear();
+            if (IsBulkDownloading && job is not null)
+            {
+                _bulkFailure = $"{Format.Sentence(Subject(job))} could not be downloaded. {ex.Message}";
+            }
             ShowError(failure ?? (job is null ? "Search could not be prepared" : $"{Format.Sentence(Subject(job))} could not be updated"), ex.Message);
             return null;
         }
@@ -573,6 +684,7 @@ public sealed partial class MainWindow
     {
         UpdateBar.IsOpen = false;
         CancelUpdateItem.IsEnabled = false;
+        UpdateMapCommands();
         bool failed = ErrorBar.IsOpen;
         await RefreshStatusAsync();
         if (!failed)
@@ -596,6 +708,10 @@ public sealed partial class MainWindow
         ProgressEvent progress;
         try
         {
+            if (_queueCancelled)
+            {
+                core.Cancel();
+            }
             progress = core.Progress();
         }
         catch (MapCoreException)

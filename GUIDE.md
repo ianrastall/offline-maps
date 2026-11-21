@@ -11,6 +11,10 @@
 
 You can install regions independently. The catalog includes U.S. states and territories, Canadian provinces and territories, Mexico as a whole or by state, and regions across Europe, Asia, Africa, the Americas and Oceania. Antarctica is available in the world overview.
 
+Choose **Bulk download** from the same screen to download all regions or every region in one country. Offline Maps downloads missing maps and prepares their search indexes first, then downloads stations and addresses, flood zones and public lands, and terrain in that order, where each layer is available. The dialog shows estimated download sizes and live free space on the map drive or storage volume. Search indexes and temporary files need additional space. On Windows, the dialog also lists the other drives. Change the destination through **File > Settings > Map folder**.
+
+If a bulk download stops, completed maps and layers are available offline. To continue on Windows, choose the same scope in **Bulk download**. On Android, choose **Resume bulk download**. Verified downloads are skipped and partial files resume when the source still matches.
+
 On Android, you can also start with prepared Delaware and District of Columbia maps. Unzip the starter library, open **Maps > Restore map library** and select the extracted **Starter map library** folder. Once the archive is unpacked, maps and search can be imported offline. [Starter library ZIP](https://github.com/ianrastall/offline-maps/releases/download/android-v0.9.0/OfflineMaps-Starter-Delaware-DC.zip)
 
 Installed maps have no expiration date. When you’re online, use **Map > Check for updates…** on Windows to see what’s newer before choosing a download. On Android, open an installed region from **Maps** and tap **Update** for the data you want to refresh. The current map stays available until its replacement passes verification.

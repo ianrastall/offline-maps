@@ -13,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Grid>
@@ -24,6 +25,7 @@
 
             <Grid Padding="16" RowSpacing="8">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
@@ -45,9 +47,31 @@
                         QueryIcon="Find"
                         TextChanged="FilterBox_TextChanged" />
                 </Grid>
+                <Grid Grid.Row="1" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="BulkButton" Click="BulkButton_Click" Content="Bulk download…" />
+                    <Button
+                        Grid.Column="1"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Drive space">
+                        <TextBlock x:Name="MapDriveText" Style="{StaticResource JupiterCaptionTextStyle}" TextWrapping="Wrap"
+                            Text="Reading map drive…" />
+                        <Button.Flyout>
+                            <Flyout Opened="StorageFlyout_Opened" Closed="StorageFlyout_Closed">
+                                <ScrollViewer MaxHeight="320" MaxWidth="440">
+                                    <TextBlock x:Name="DriveDetails" Style="{StaticResource JupiterBodyTextStyle}" TextWrapping="Wrap" />
+                                </ScrollViewer>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                </Grid>
                 <ListView
                     x:Name="RegionList"
-                    Grid.Row="1"
+                    Grid.Row="2"
                     AutomationProperties.Name="Regions"
                     SelectionChanged="RegionList_SelectionChanged"
                     SelectionMode="Single">
@@ -141,7 +165,21 @@
         </Grid>
 
         <!--  Status bar (standard section 6): persistent state only  -->
-        <Border Grid.Row="1" Style="{StaticResource JupiterStatusBarStyle}">
+        <Grid x:Name="BulkProgress" Grid.Row="1" Padding="16,8" ColumnSpacing="12" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Spacing="4">
+                <TextBlock x:Name="BulkSummary" AutomationProperties.LiveSetting="Polite"
+                    Style="{StaticResource JupiterBodyTextStyle}" TextWrapping="Wrap" />
+                <TextBlock x:Name="BulkJobText" Style="{StaticResource JupiterCaptionTextStyle}" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button x:Name="CancelBulkButton" Grid.Column="1" VerticalAlignment="Center"
+                Click="CancelBulkButton_Click" Content="Cancel bulk download" />
+        </Grid>
+
+        <Border Grid.Row="2" Style="{StaticResource JupiterStatusBarStyle}">
             <TextBlock
                 x:Name="StatusText"
                 VerticalAlignment="Center"

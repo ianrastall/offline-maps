@@ -384,11 +384,15 @@ class MapModel(application: Application) : AndroidViewModel(application) {
     }
     fun cancelWork() { if (downloads.active) downloads.pause() else cancelImport() }
     fun startDownload(region: JSONObject, target: Int) {
-        if (busy != null || session.importing) return
+        if (hasWork) return
         error = null
-        downloads.start(DownloadRequest(region.getString("id"), target), region.optLong(when (target) {
-            1 -> "mapBytes"; 2 -> "extrasBytes"; 3 -> "terrainBytes"; else -> "overlayBytes"
-        }), region.getString("name"))
+        downloads.start(downloadItem(region, target))
+    }
+    fun startBulkDownload(scope: String) {
+        if (hasWork || catalog.isEmpty() || status == null) return
+        error = null
+        val installed = status?.getJSONArray("regions")?.objects().orEmpty()
+        downloads.startBulk(planBulkDownload(catalog, installed, scope), scope)
     }
     fun position(stale: Boolean = false) {
         val current = fix

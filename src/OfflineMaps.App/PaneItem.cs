@@ -150,6 +150,13 @@ internal static class Format
         _ => string.Create(CultureInfo.CurrentCulture, $"{bytes / 1_000_000.0:0} MB"),
     };
 
+    public static string StorageSize(ulong bytes) => bytes switch
+    {
+        >= 1_000_000_000_000 => $"{bytes / 1_000_000_000_000.0:0.##} TB",
+        >= 1_000_000_000 => $"{bytes / 1_000_000_000.0:0.##} GB",
+        _ => Megabytes(bytes),
+    };
+
     /// <summary>"2026-11-08" as a long date in the person's format.</summary>
     public static string Date(string iso) =>
         DateTime.TryParseExact(iso.Length >= 10 ? iso[..10] : iso, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)

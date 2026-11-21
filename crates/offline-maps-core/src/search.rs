@@ -644,7 +644,9 @@ pub(crate) fn write_database(
         }
         copied?;
     } else {
-        built?;
+        built.inspect_err(|_| {
+            let _ = std::fs::remove_file(&temporary);
+        })?;
     }
     std::fs::rename(&temporary, out)?;
     Ok(())

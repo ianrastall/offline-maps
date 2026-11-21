@@ -36,7 +36,11 @@ impl std::error::Error for PackageError {}
 
 impl From<rusqlite::Error> for PackageError {
     fn from(error: rusqlite::Error) -> Self {
-        Self::Sqlite(error)
+        if error.sqlite_error_code() == Some(rusqlite::ErrorCode::DiskFull) {
+            Self::Io(std::io::Error::new(std::io::ErrorKind::StorageFull, error))
+        } else {
+            Self::Sqlite(error)
+        }
     }
 }
 

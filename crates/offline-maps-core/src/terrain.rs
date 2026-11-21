@@ -338,11 +338,6 @@ pub fn update_terrain(
 
     let staging_dir = store.staging_dir(&id);
     fs::create_dir_all(&staging_dir).map_err(UpdateError::Storage)?;
-    let available = (options.available_space)(&staging_dir).map_err(UpdateError::Storage)?;
-    let needed = total + options.reserve_bytes;
-    if available < needed {
-        return Err(UpdateError::InsufficientSpace { needed, available });
-    }
     let staging = Staging {
         url: url.to_owned(),
         validator: validator.clone(),
@@ -381,6 +376,23 @@ pub fn update_terrain(
         .into_iter()
         .filter(|(_, wanted)| wanted.iter().any(|w| !have.contains(&(w.z, w.x, w.y))))
         .collect();
+    // The archive can reuse one tile's bytes at several coordinates, but the MBTiles
+    // database stores a copy at each coordinate. Already staged tiles take no new space.
+    let remaining_bytes = missing
+        .iter()
+        .map(|((_, length), wanted)| {
+            u64::from(*length)
+                * wanted
+                    .iter()
+                    .filter(|w| !have.contains(&(w.z, w.x, w.y)))
+                    .count() as u64
+        })
+        .sum::<u64>();
+    let available = (options.available_space)(&staging_dir).map_err(UpdateError::Storage)?;
+    let needed = remaining_bytes.saturating_add(options.reserve_bytes);
+    if available < needed {
+        return Err(UpdateError::InsufficientSpace { needed, available });
+    }
     let mut received = total - missing.iter().map(|((_, l), _)| u64::from(*l)).sum::<u64>();
     progress(Progress::Downloading {
         received,
@@ -449,6 +461,7 @@ pub fn update_terrain(
         });
     }
 
+    check()?;
     progress(Progress::Verifying);
     let count: i64 = db
         .query_row("SELECT count(*) FROM tiles", [], |r| r.get(0))

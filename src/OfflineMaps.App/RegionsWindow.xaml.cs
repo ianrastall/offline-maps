@@ -79,6 +79,9 @@ public sealed partial class RegionsWindow : Window
     private readonly MainWindow _main;
     private readonly List<RegionItem> _all;
     private readonly ObservableCollection<RegionGroup> _groups = [];
+    private HashSet<string> _queuedRegions = [];
+    private Dictionary<string, RegionStatus> _installed = [];
+    private Status? _shownStatus;
 
     /// <summary>The rows shown under the current filter, in list order.</summary>
     private IEnumerable<RegionItem> Shown => _groups.SelectMany(g => g);
@@ -117,10 +120,12 @@ public sealed partial class RegionsWindow : Window
             var installed = _main.CurrentStatus?.Regions.FirstOrDefault(r => r.Map is not null);
             Select(regionId ?? installed?.Id);
             FilterBox.Focus(FocusState.Programmatic);
+            StartStoragePolling();
         };
         Closed += (_, _) =>
         {
             main.RegionsChanged -= Refresh;
+            StopStoragePolling();
             App.Current.Themes.Detach(this);
             App.Current.Accent.Detach(Root);
         };
@@ -146,7 +151,7 @@ public sealed partial class RegionsWindow : Window
         }
     }
 
-    private RegionStatus? Installed(string id) => _main.CurrentStatus?.Regions.FirstOrDefault(r => r.Id == id);
+    private RegionStatus? Installed(string id) => _installed.GetValueOrDefault(id);
 
     /// <summary>The one-line state of a region, as shown in its row.</summary>
     private string Describe(RegionItem item)
@@ -163,7 +168,7 @@ public sealed partial class RegionsWindow : Window
                 _ => $"Stations and addresses: {_main.ProgressText}",
             });
         }
-        else if (_main.IsQueued(item.Id, UpdateTarget.Map) || _main.IsQueued(item.Id, UpdateTarget.Extras) || _main.IsQueued(item.Id, UpdateTarget.Terrain) || _main.IsQueued(item.Id, UpdateTarget.Overlays))
+        else if (_queuedRegions.Contains(item.Id))
         {
             parts.Add("Queued");
         }
@@ -198,11 +203,17 @@ public sealed partial class RegionsWindow : Window
 
     private void Refresh()
     {
+        var status = _main.CurrentStatus;
+        if (!ReferenceEquals(_shownStatus, status))
+        {
+            _shownStatus = status;
+            _installed = (status?.Regions ?? []).ToDictionary(r => r.Id);
+        }
+        _queuedRegions = _main.QueuedRegionIds.ToHashSet();
         foreach (var item in _all)
         {
             item.Caption = Describe(item);
         }
-        var status = _main.CurrentStatus;
         int count = status?.Regions.Count(r => r.Map is not null) ?? 0;
         ulong bytes = 0;
         foreach (var r in status?.Regions ?? [])
@@ -213,6 +224,7 @@ public sealed partial class RegionsWindow : Window
             ? $"No regions installed · {_all.Count} available"
             : $"{count} of {_all.Count} regions installed · maps {Format.Megabytes(bytes)}";
         ShowDetail();
+        RefreshBulkProgress();
     }
 
     private void ApplyFilter()
@@ -390,7 +402,7 @@ public sealed partial class RegionsWindow : Window
         bool newer = _main.CheckFor(regionId, target) is { Newer: true };
         button.Visibility = !installed || newer ? Visibility.Visible : Visibility.Collapsed;
         Label(button, installed ? $"Download newer {what}" : $"Download {what}");
-        button.IsEnabled = enabled && !_main.IsCheckingUpdates && !_main.IsExportingLibrary;
+        button.IsEnabled = enabled && !_main.IsCheckingUpdates && !_main.IsExportingLibrary && !_main.IsBulkDownloading;
     }
 
     /// <summary>What the last check found for an installed item, as a sentence to follow its line.</summary>
