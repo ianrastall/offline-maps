@@ -149,7 +149,7 @@ fn dispatch(service: &Service, request: pb::Request) -> pb::Response {
         }
         Some(Command::RemovePlace(remove)) => service.remove_place(remove.id).map(|()| None),
         Some(Command::Update(update)) => service.update(&update).map(|r| Some(R::Update(r))),
-        Some(Command::GetStations(_)) => service.stations().map(|s| Some(R::Stations(s))),
+        Some(Command::GetStations(get)) => service.stations(&get).map(|s| Some(R::Stations(s))),
         Some(Command::PrepareSearch(_)) => service.prepare_search().map(|()| None),
         Some(Command::ResetPlaces(_)) => service.reset_places().map(|()| None),
         Some(Command::RemoveRegion(remove)) => service.remove_region(&remove).map(|()| None),
@@ -181,6 +181,9 @@ fn dispatch(service: &Service, request: pb::Request) -> pb::Response {
         Some(Command::ExportLibrary(request)) => service
             .export_library(&request)
             .map(|result| Some(R::ExportLibrary(result))),
+        Some(Command::ImportLibrary(request)) => service
+            .import_library(std::path::Path::new(&request.source))
+            .map(|result| Some(R::ImportLibrary(result))),
     };
     match result {
         Ok(result) => pb::Response {

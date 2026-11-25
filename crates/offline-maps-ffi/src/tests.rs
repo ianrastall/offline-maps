@@ -293,7 +293,7 @@ fn empty_store_reports_no_map_and_refuses_search() {
     let stations = call(
         core,
         8,
-        pb::request::Command::GetStations(pb::GetStations {}),
+        pb::request::Command::GetStations(pb::GetStations::default()),
     );
     match stations.result {
         Some(pb::response::Result::Stations(s)) => assert!(s.geojson.contains("FeatureCollection")),
@@ -676,4 +676,37 @@ fn move_store_moves_places_and_retires_the_core() {
     let names: Vec<_> = status.places.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, ["Home", "Work"]);
     unsafe { om_destroy(reopened) };
+}
+
+#[test]
+fn stations_areas_wrap_into_one_world() {
+    use crate::service::station_area;
+    let area = |west, south, east, north| {
+        station_area(&pb::Bounds {
+            west,
+            south,
+            east,
+            north,
+        })
+        .map(|b| [b.west, b.south, b.east, b.north])
+    };
+    assert_eq!(
+        area(-90.0, 40.0, -88.0, 41.0).unwrap(),
+        [-90.0, 40.0, -88.0, 41.0]
+    );
+    // A world copy to the east, and one straddling the antimeridian.
+    assert_eq!(
+        area(270.0, 40.0, 272.0, 41.0).unwrap(),
+        [-90.0, 40.0, -88.0, 41.0]
+    );
+    assert_eq!(
+        area(-185.0, 50.0, -175.0, 95.0).unwrap(),
+        [175.0, 50.0, -175.0, 90.0]
+    );
+    assert_eq!(
+        area(-300.0, 0.0, 300.0, 1.0).unwrap(),
+        [-180.0, 0.0, 180.0, 1.0]
+    );
+    assert!(area(f64::NAN, 0.0, 1.0, 1.0).is_err());
+    assert!(area(2.0, 0.0, 1.0, 1.0).is_err());
 }

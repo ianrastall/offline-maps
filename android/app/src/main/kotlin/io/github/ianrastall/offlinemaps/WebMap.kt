@@ -234,13 +234,25 @@ class WebMap(
                 path.startsWith("/overview/") -> tile(NativeCore.TILE_OVERVIEW, path, "application/x-protobuf")
                 path.startsWith("/overlays/") -> tile(NativeCore.TILE_OVERLAY, path, "application/x-protobuf")
                 path.startsWith("/terrain/") -> tile(NativeCore.TILE_TERRAIN, path, "image/webp")
-                path == "/extras/stations.geojson" -> body(core.use { NativeCore.stations(it) }.toByteArray(), "application/geo+json")
+                path == "/extras/stations.geojson" -> stations(uri.getQueryParameter("bbox"))
                 else -> file(path)
             }
         } catch (e: RuntimeException) {
             Log.w(TAG, "$path failed: ${e.message}")
             empty(500, "Error")
         }
+    }
+
+    // The page asks for the area around the view: every installed region's
+    // points at once would be too much to pass to it.
+    private fun stations(bbox: String?): WebResourceResponse {
+        val area = if (bbox == null) {
+            List(4) { Double.NaN }
+        } else {
+            bbox.split(',').mapNotNull { it.toDoubleOrNull() }.takeIf { it.size == 4 } ?: return empty(400, "Bad Request")
+        }
+        val json = core.use { NativeCore.stations(it, area[0], area[1], area[2], area[3]) }
+        return body(json.toByteArray(), "application/geo+json")
     }
 
     private fun tile(kind: Int, path: String, type: String): WebResourceResponse {

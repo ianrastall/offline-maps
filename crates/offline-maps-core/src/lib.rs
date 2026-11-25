@@ -3,6 +3,7 @@ pub mod addresses;
 pub mod bundles;
 pub mod download;
 pub mod extras;
+pub mod library_import;
 pub mod mbtiles;
 pub mod merge;
 pub mod mvt;

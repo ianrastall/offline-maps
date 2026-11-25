@@ -63,6 +63,7 @@ message Request {
     ExportPlaces export_places = 18;
     ImportPlaces import_places = 19;
     ExportLibrary export_library = 20;
+    ImportLibrary import_library = 21;
   }
 }
 
@@ -76,6 +77,30 @@ message ExportLibrary {
 
 message ExportLibraryResult {
   string path = 1;
+}
+
+// Adds the regions, and separate layers such as terrain, of a map library
+// folder (an export, an Android backup or the published map packages).
+// Installed maps and layers are never replaced.
+message ImportLibrary {
+  string source = 1;
+}
+
+message ImportLibraryResult {
+  // Region IDs whose maps were added.
+  repeated string added = 1;
+  // Region IDs that gained separate layers.
+  repeated string layers_added = 2;
+  // Folders whose region or layers were already installed.
+  uint32 skipped = 3;
+  // Region IDs of separate layers whose map is not installed.
+  repeated string needs_map = 4;
+  repeated ImportFailure failed = 5;
+}
+
+message ImportFailure {
+  string folder = 1;
+  string reason = 2;
 }
 
 message Search {
@@ -155,7 +180,12 @@ message GetTerrainTile {
   uint32 y = 3;
 }
 
-message GetStations {}
+// Stations and outdoor places inside `area`, or of every installed region
+// without one. West may exceed east across the antimeridian, and longitudes
+// outside -180 to 180 (from a world copy) are wrapped.
+message GetStations {
+  Bounds area = 1;
+}
 
 // Builds the search index of every installed map that has none. Long-running.
 message PrepareSearch {}
@@ -232,6 +262,7 @@ message Response {
     PlacesBackup places_backup = 13;
     PlacesImportResult places_import = 14;
     ExportLibraryResult export_library = 15;
+    ImportLibraryResult import_library = 16;
   }
 }
 

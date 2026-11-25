@@ -48,7 +48,9 @@ impl Transfer {
         if value.schema != 1 || crate::regions::find(&value.region).is_none() {
             return Err(invalid("Unknown transfer format or region."));
         }
-        if !(4..=13).contains(&value.files.len()) {
+        // A whole region (map, search and up to three layers) or, for a region
+        // that is already installed, optional layers alone (such as terrain).
+        if !(3..=13).contains(&value.files.len()) {
             return Err(invalid("The transfer does not list a prepared region."));
         }
         for (name, record) in &value.files {
@@ -71,7 +73,7 @@ impl Transfer {
     }
 }
 
-fn regular(root: &Path, name: &str) -> Result<PathBuf, PackageError> {
+pub(crate) fn regular(root: &Path, name: &str) -> Result<PathBuf, PackageError> {
     let mut path = root.to_path_buf();
     for part in name.split('/') {
         path.push(part);
@@ -97,7 +99,8 @@ fn integrity(path: &Path) -> Result<(), PackageError> {
 }
 
 struct RegionFiles {
-    map: ActivePackage,
+    /// Absent from a transfer of optional layers alone.
+    map: Option<ActivePackage>,
     extras: Option<ActiveExtras>,
     terrain: Option<ActiveTerrain>,
     overlays: Option<ActiveOverlays>,
@@ -106,7 +109,7 @@ struct RegionFiles {
 impl RegionFiles {
     fn open(store: &PackageStore, id: &str) -> Result<Self, PackageError> {
         Ok(Self {
-            map: store.active(id)?.ok_or_else(|| invalid("No active map."))?,
+            map: store.active(id)?,
             extras: active_extras(store, id)?,
             terrain: active_terrain(store, id)?,
             overlays: active_overlays(store, id)?,
@@ -115,12 +118,15 @@ impl RegionFiles {
 
     fn paths(&self, store: &PackageStore, id: &str) -> Vec<PathBuf> {
         let region = store.region_dir(id);
-        let mut paths = vec![
-            region.join("active.json"),
-            self.map.path.clone(),
-            self.map.path.with_file_name("record.json"),
-            self.map.search_index_path(),
-        ];
+        let mut paths = Vec::new();
+        if let Some(map) = &self.map {
+            paths.extend([
+                region.join("active.json"),
+                map.path.clone(),
+                map.path.with_file_name("record.json"),
+                map.search_index_path(),
+            ]);
+        }
         for (layer, file) in [
             ("extras", self.extras.as_ref().map(|e| &e.path)),
             ("terrain", self.terrain.as_ref().map(|t| &t.path)),
@@ -157,13 +163,17 @@ pub fn describe_export(
     }
     let mut files = BTreeMap::new();
     let active = RegionFiles::open(store, id)?;
+    let map = active
+        .map
+        .as_ref()
+        .ok_or_else(|| invalid("No active map."))?;
     for file in active.paths(store, id) {
         let name = relative_name(store.root(), &file);
         let (sha256, bytes) = sha256_file(&regular(store.root(), &name)?, cancelled)?;
         if bytes == 0 {
             return Err(invalid(format!("{name} is empty.")));
         }
-        if file == active.map.path && sha256 != active.map.record.sha256 {
+        if file == map.path && sha256 != map.record.sha256 {
             return Err(invalid("The installed map failed its checksum."));
         }
         files.insert(name, FileRecord { bytes, sha256 });
@@ -318,28 +328,38 @@ pub fn verify(root: &Path, cancelled: &AtomicBool) -> Result<String, PackageErro
     let id = manifest.region.as_str();
     let region = crate::regions::find(id).expect("validated region");
     let region_files = RegionFiles::open(&store, id)?;
-    let active = &region_files.map;
-    let record = verify_package(
-        &active.path,
-        region,
-        active.record.source.clone(),
-        &active.record.downloaded_at,
-        &active.record.verified_at,
-        cancelled,
-    )?;
-    if record.sha256 != active.record.sha256
-        || record.metadata != active.record.metadata
-        || record.check != active.record.check
+    let mut search = None;
+    if let Some(active) = &region_files.map {
+        let record = verify_package(
+            &active.path,
+            region,
+            active.record.source.clone(),
+            &active.record.downloaded_at,
+            &active.record.verified_at,
+            cancelled,
+        )?;
+        if record.sha256 != active.record.sha256
+            || record.metadata != active.record.metadata
+            || record.check != active.record.check
+        {
+            return Err(invalid("The map does not match its desktop record."));
+        }
+        integrity(&active.search_index_path())?;
+        let index = SearchIndex::open(&active.search_index_path(), &record.sha256)?;
+        index.stats()?;
+        search = Some(index);
+    } else if region_files.extras.is_none()
+        && region_files.terrain.is_none()
+        && region_files.overlays.is_none()
     {
-        return Err(invalid("The map does not match its desktop record."));
+        return Err(invalid("The transfer does not list a prepared region."));
     }
-    integrity(&active.search_index_path())?;
-    let mut search = SearchIndex::open(&active.search_index_path(), &record.sha256)?;
-    search.stats()?;
     if let Some(extra) = &region_files.extras {
         integrity(&extra.path)?;
         open_entries(&extra.path)?;
-        search.attach_extras(&extra.path)?;
+        if let Some(search) = &mut search {
+            search.attach_extras(&extra.path)?;
+        }
     }
     if let Some(terrain) = &region_files.terrain {
         integrity(&terrain.path)?;

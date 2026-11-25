@@ -552,10 +552,12 @@ public sealed partial class MainWindow : Window
                 {
                     Title = checking ? "Stop checking for updates and close?"
                         : IsExportingLibrary ? "Stop exporting maps and close?"
+                        : IsImportingLibrary ? "Stop importing maps and close?"
                         : IsBulkDownloading ? "Stop the bulk download and close?"
                         : _movingFrom is null ? "Stop the download and close?" : "Stop moving the maps and close?",
                     Content = Text(checking ? "The remaining checks will be canceled." : IsExportingLibrary
-                        ? "The unfinished library will be removed." : IsBulkDownloading
+                        ? "The unfinished library will be removed." : IsImportingLibrary
+                        ? "Maps imported so far stay installed. The library folder is not changed." : IsBulkDownloading
                         ? "Completed downloads stay installed. Choose the same scope in Bulk download to continue where you left off."
                         : _movingFrom is null ? "What has been downloaded is kept, and the download continues from there next time."
                         : $"The maps stay in {_movingFrom}, and what was copied so far is removed."),

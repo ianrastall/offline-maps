@@ -74,7 +74,7 @@ async function loadStyle(name) {
     style.glyphs = absolute(style.glyphs);
     style.sprite = style.sprite.map((s) => ({ ...s, url: absolute(s.url) }));
     for (const source of Object.values(style.sources)) {
-      if (source.type === 'geojson') source.data = absolute(source.data);
+      if (source.type === 'geojson' && typeof source.data === 'string') source.data = absolute(source.data);
       if (source.type !== 'vector') continue;
       source.tiles = source.tiles.map(absolute);
       // Zoomed out, the overview stands in for the installed maps, whose
@@ -496,6 +496,28 @@ function setOutdoorVisibility() {
   }
 }
 
+// Stations and outdoor places come for the area around the view once it is
+// close enough to show them (their layers start at zoom 11): every installed
+// region's points at once are too many to pass to the page.
+const STATIONS_FROM_ZOOM = 10;
+// [west, south, east, north] last requested, or null.
+let stationsArea = null;
+
+function updateStations() {
+  if (!map || !styleReady || map.getZoom() < STATIONS_FROM_ZOOM) return;
+  const source = map.getSource('stations');
+  if (!source) return;
+  const b = map.getBounds();
+  const [west, south, east, north] = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  const a = stationsArea;
+  if (a && west >= a[0] && south >= a[1] && east <= a[2] && north <= a[3]) return;
+  // Half a view on every side, so small moves need no new request.
+  const padLon = (east - west) / 2;
+  const padLat = (north - south) / 2;
+  stationsArea = [west - padLon, Math.max(-90, south - padLat), east + padLon, Math.min(90, north + padLat)];
+  source.setData(absolute(`extras/stations.geojson?bbox=${stationsArea.map((v) => v.toFixed(5)).join(',')}`));
+}
+
 // The overview's layers, drawn under the base map. Every feature in a US state or
 // territory has `region` (such as us-il); those of installed regions are left out.
 const OVERVIEW_LAYERS = [
@@ -746,6 +768,8 @@ async function init(message) {
     addChargingIcon();
     OUTDOOR_LAYERS.forEach(addOutdoorIcon);
     setOutdoorVisibility();
+    stationsArea = null;
+    updateStations();
     applyOverview();
     applyOverlays();
     applyTerrain();
@@ -757,6 +781,7 @@ async function init(message) {
     else addShield(id);
   });
   map.on('moveend', reportView);
+  map.on('moveend', updateStations);
   map.on('movestart', (event) => { if (event.originalEvent) post({ kind: 'gesture' }); });
   // Touching or dragging the map suspends GPS following before another fix
   // can recenter it during the gesture.

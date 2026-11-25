@@ -15,7 +15,7 @@ Choose **Bulk download** from the same screen to download all regions or every r
 
 If a bulk download stops, completed maps and layers are available offline. To continue on Windows, choose the same scope in **Bulk download**. On Android, choose **Resume bulk download**. Verified downloads are skipped and partial files resume when the source still matches.
 
-On Android, you can also start with prepared Delaware and District of Columbia maps. Unzip the starter library, open **Maps > Restore map library** and select the extracted **Starter map library** folder. Once the archive is unpacked, maps and search can be imported offline. [Starter library ZIP](https://github.com/ianrastall/offline-maps/releases/download/android-v0.9.0/OfflineMaps-Starter-Delaware-DC.zip)
+You can also start from prepared map packages for the United States, Canada, Mexico and parts of Central America and the Caribbean. Each region has a ZIP with its map, search, stations and addresses, and flood zones and public lands where available. Terrain is a separate ZIP for each region where it fits in one file. Mexico is packaged by state. Terrain for Alaska, Nunavut and other large regions is downloaded in the app. Extract the ZIPs you need into the same place. They combine into one **Offline Maps Library** folder. On Windows, choose **Map > Import map library…** and select that folder. On Android, choose **Maps > Restore map library**. Region folders are imported before terrain folders. Regions and layers that are already installed are skipped. Terrain is added only to installed maps. Import works offline once the archives are extracted. [Map packages](https://github.com/ianrastall/offline-maps/releases/tag/v0.23.0)
 
 Installed maps have no expiration date. When you’re online, use **Map > Check for updates…** on Windows to see what’s newer before choosing a download. On Android, open an installed region from **Maps** and tap **Update** for the data you want to refresh. The current map stays available until its replacement passes verification.
 
@@ -44,7 +44,7 @@ After reinstalling, choose **Maps > Restore map library** and select the dated *
 
 ### Copy maps and places between devices
 
-1. On Windows, open **Map > Export maps for Android…**, select installed regions, and choose a destination folder outside the map store. Wait for **Map library ready**.
+1. On Windows, open **Map > Export maps for Android…**, select installed regions, and choose a destination folder outside the map store. Wait for **Map library ready**. Another Windows computer can add these maps with **Map > Import map library…**.
 2. Copy the entire **Offline Maps Library** folder to the phone over USB, for example into Documents. Allow space on the phone for that folder and the app’s verified installed copy.
 3. On Android, open **Maps > Restore map library** and select the copied folder. Restore adds missing regions with their offline search indexes and optional layers. You can do the export and restore offline with the maps already installed on Windows.
 
@@ -112,7 +112,7 @@ The first command builds the app for development. The release script runs format
 
 ### Build Android
 
-Use the `android-v0.10.0` tag to reproduce the published preview.
+Use the `android-v0.12.0` tag to reproduce the published preview.
 
 On Windows, set `JAVA_HOME` to JDK 21 and `ANDROID_HOME` to the Android SDK. Install SDK platform 36, build tools 36.1.0, NDK `30.0.16248370`, Python 3 and `cargo-ndk`. Prepare the renderer assets, then run these commands from the repository root.
 

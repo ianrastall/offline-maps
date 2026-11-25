@@ -158,7 +158,8 @@ internal class MapLibrary(
 
     fun restore(tree: Uri, progress: (String) -> Unit): String {
         val folder = Folder(tree)
-        val installed = regions().mapTo(mutableSetOf()) { it.getString("id") }
+        val current = regions().associateBy { it.getString("id") }
+        val installed = current.keys.toMutableSet()
         val rootChildren = folder.children(folder.root)
         val rootManifest = rootChildren.firstOrNull { it.name == MANIFEST }
         val candidates = if (rootManifest != null) {
@@ -172,20 +173,43 @@ internal class MapLibrary(
         val saved = rootChildren.firstOrNull { it.name == PLACES }
         check(candidates.isNotEmpty() || saved != null) { "This folder has no prepared maps or saved places." }
         var restored = 0
+        var layers = 0
         var skipped = 0
+        var needsMap = 0
         var failed = 0
-        for ((directory, marker) in candidates) {
+        // Whole regions first, so separate terrain can join a map restored from the same library.
+        val ordered = candidates.mapNotNull { (directory, marker) ->
             operation.checkCancelled()
             try {
-                val id = JSONObject(readText(marker.uri, 64 * 1024)).getString("region")
-                if (id in installed) {
+                val manifest = JSONObject(readText(marker.uri, 64 * 1024))
+                val id = manifest.getString("region")
+                val files = manifest.getJSONObject("files")
+                val listed = listOf("extras", "terrain", "overlays").filter { files.has("$id/$it/active.json") }
+                Triple(directory, id, listed.takeUnless { files.has("$id/active.json") })
+            } catch (_: Exception) {
+                failed++
+                null
+            }
+        }.sortedBy { it.third != null }
+        for ((directory, id, separate) in ordered) {
+            operation.checkCancelled()
+            try {
+                if (separate == null && id in installed) {
+                    skipped++
+                    continue
+                }
+                if (separate != null && id !in installed) {
+                    needsMap++
+                    continue
+                }
+                if (separate != null && separate.any { current[id]?.optBoolean(it) == true }) {
                     skipped++
                     continue
                 }
                 operation.stage(tree, DocumentsContract.getDocumentId(directory), progress).use { staged ->
                     check(!staged.review.getBoolean("replacing")) { "The region is already installed." }
                     installed += operation.install(staged)
-                    restored++
+                    if (separate == null) restored++ else layers++
                 }
             } catch (_: Exception) {
                 operation.checkCancelled()
@@ -204,7 +228,9 @@ internal class MapLibrary(
             }
         }
         val unreadable = if (failed > 0) " ${countText(failed, "map folder")} could not be restored." else ""
-        return "Restored ${countText(restored, "map")}. $skipped already installed.$places$unreadable"
+        val added = if (layers > 0) " Added terrain or other layers to ${countText(layers, "map")}." else ""
+        val missing = if (needsMap > 0) " ${countText(needsMap, "terrain folder")} skipped until its map is installed." else ""
+        return "Restored ${countText(restored, "map")}.$added $skipped already installed.$missing$places$unreadable"
     }
 
     private fun copyAndVerify(source: File, document: Uri, bytes: Long, sha: String, buffer: ByteArray) {

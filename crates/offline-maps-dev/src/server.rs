@@ -172,6 +172,8 @@ fn handle(stream: TcpStream, state: &State) -> std::io::Result<()> {
 }
 
 fn route(path: &str, state: &State) -> Response {
+    // The map page asks for stations by area (`?bbox=`); this server has one region.
+    let path = path.split('?').next().unwrap_or(path);
     if let Some(rest) = path.strip_prefix("/tiles/") {
         return tile(rest, state);
     }

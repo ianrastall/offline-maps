@@ -59,6 +59,14 @@ public class MapCoreTests
         core.RemoveRegion("us-in");
         Assert.Equal(ErrorKind.InvalidArgument, Assert.Throws<MapCoreException>(() => core.RemoveRegion("us-zz")).Kind);
         Assert.Contains("FeatureCollection", core.StationsGeoJson());
+        Assert.Contains("FeatureCollection", core.StationsGeoJson(new Bounds { West = 190, South = 40, East = 200, North = 41 }));
+        Assert.Equal(ErrorKind.InvalidArgument, Assert.Throws<MapCoreException>(
+            () => core.StationsGeoJson(new Bounds { West = 2, South = 0, East = 1, North = 1 })).Kind);
+        using (var empty = new TempStore())
+        {
+            Directory.CreateDirectory(empty.Path);
+            Assert.Equal(ErrorKind.InvalidData, Assert.Throws<MapCoreException>(() => core.ImportLibrary(empty.Path)).Kind);
+        }
         Assert.False(core.Progress().Active);
         core.Cancel();
     }

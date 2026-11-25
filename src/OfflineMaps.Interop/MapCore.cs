@@ -200,7 +200,19 @@ public sealed class MapCore : IDisposable
 
     public void PrepareSearch() => Call(new Request { PrepareSearch = new PrepareSearch() });
 
-    public string StationsGeoJson() => Call(new Request { GetStations = new GetStations() }).Stations.Geojson;
+    /// <summary>
+    /// Adds the regions and separate layers (such as terrain) of a map library folder that are not installed.
+    /// Long-running; cancel with <see cref="Cancel"/>.
+    /// </summary>
+    public ImportLibraryResult ImportLibrary(string source) =>
+        Call(new Request { ImportLibrary = new ImportLibrary { Source = source } }).ImportLibrary;
+
+    /// <summary>
+    /// Stations and outdoor places inside <paramref name="area"/>, or of every installed region without one,
+    /// as a GeoJSON FeatureCollection.
+    /// </summary>
+    public string StationsGeoJson(Bounds? area = null) =>
+        Call(new Request { GetStations = new GetStations { Area = area } }).Stations.Geojson;
 
     /// <summary>The decompressed vector tile, or an empty array where there is none.</summary>
     public byte[] Tile(int z, int x, int y)

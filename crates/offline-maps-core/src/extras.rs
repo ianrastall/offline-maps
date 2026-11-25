@@ -922,36 +922,58 @@ pub fn stations_geojson(path: &Path) -> Result<String, PackageError> {
 
 /// Stations of several regions' extras in one feature collection.
 pub fn stations_geojson_all(paths: &[&Path]) -> Result<String, PackageError> {
+    stations_geojson_in(paths, None)
+}
+
+/// Stations of several regions' extras inside `area` (all of them without
+/// one) in one feature collection. An area whose west is east of its east
+/// crosses the antimeridian. A point that overlapping regions both carry
+/// (Mexico and its states) is kept once.
+pub fn stations_geojson_in(paths: &[&Path], area: Option<&Bounds>) -> Result<String, PackageError> {
+    let mut seen = HashSet::new();
     let mut features = Vec::new();
     for path in paths {
-        features.extend(station_features(path)?);
+        station_features(path, area, &mut seen, &mut features)?;
     }
     Ok(serde_json::json!({ "type": "FeatureCollection", "features": features }).to_string())
 }
 
-fn station_features(path: &Path) -> Result<Vec<serde_json::Value>, PackageError> {
+fn station_features(
+    path: &Path,
+    area: Option<&Bounds>,
+    seen: &mut HashSet<(String, i64, i64)>,
+    features: &mut Vec<serde_json::Value>,
+) -> Result<(), PackageError> {
     let db = open_entries(path)?;
-    let mut statement = db.prepare("SELECT name, category, detail, lon, lat FROM entries")?;
-    let features = statement
-        .query_map([], |r| {
-            Ok(serde_json::json!({
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": [
-                        (r.get::<_, f64>(3)? * 1e6).round() / 1e6,
-                        (r.get::<_, f64>(4)? * 1e6).round() / 1e6,
-                    ],
-                },
-                "properties": {
-                    "name": r.get::<_, String>(0)?,
-                    "category": r.get::<_, String>(1)?,
-                    "detail": r.get::<_, Option<String>>(2)?,
-                },
-            }))
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(features)
+    // Two longitude ranges, the second empty unless the area crosses the antimeridian.
+    let (south, north, lon) = match area {
+        None => (-90.0, 90.0, [-180.0, 180.0, 1.0, 0.0]),
+        Some(a) if a.west <= a.east => (a.south, a.north, [a.west, a.east, 1.0, 0.0]),
+        Some(a) => (a.south, a.north, [a.west, 180.0, -180.0, a.east]),
+    };
+    let mut statement = db.prepare(
+        "SELECT name, category, detail, lon, lat FROM entries \
+         WHERE lat BETWEEN ?1 AND ?2 AND (lon BETWEEN ?3 AND ?4 OR lon BETWEEN ?5 AND ?6)",
+    )?;
+    let mut rows = statement.query(params![south, north, lon[0], lon[1], lon[2], lon[3]])?;
+    while let Some(r) = rows.next()? {
+        let category: String = r.get(1)?;
+        let x = (r.get::<_, f64>(3)? * 1e6).round();
+        let y = (r.get::<_, f64>(4)? * 1e6).round();
+        if !seen.insert((category.clone(), x as i64, y as i64)) {
+            continue;
+        }
+        features.push(serde_json::json!({
+            "type": "Feature",
+            "geometry": { "type": "Point", "coordinates": [x / 1e6, y / 1e6] },
+            "properties": {
+                "name": r.get::<_, String>(0)?,
+                "category": category,
+                "detail": r.get::<_, Option<String>>(2)?,
+            },
+        }));
+    }
+    Ok(())
 }
 
 /// Persisted beside each extras version.

@@ -402,7 +402,7 @@ public sealed partial class RegionsWindow : Window
         bool newer = _main.CheckFor(regionId, target) is { Newer: true };
         button.Visibility = !installed || newer ? Visibility.Visible : Visibility.Collapsed;
         Label(button, installed ? $"Download newer {what}" : $"Download {what}");
-        button.IsEnabled = enabled && !_main.IsCheckingUpdates && !_main.IsExportingLibrary && !_main.IsBulkDownloading;
+        button.IsEnabled = enabled && !_main.IsCheckingUpdates && !_main.IsLibraryBusy && !_main.IsBulkDownloading;
     }
 
     /// <summary>What the last check found for an installed item, as a sentence to follow its line.</summary>

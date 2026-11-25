@@ -283,6 +283,42 @@ fn stations_as_geojson() {
 }
 
 #[test]
+fn stations_by_area_without_repeats() {
+    let dir = TempDir::new();
+    let path = dir.0.join(EXTRAS_FILE);
+    write_extras(&extract_sample(&dir), "sha", &path).unwrap();
+    let count = |paths: &[&Path], area: Option<Bounds>| {
+        let json: serde_json::Value =
+            serde_json::from_str(&stations_geojson_in(paths, area.as_ref()).unwrap()).unwrap();
+        json["features"].as_array().unwrap().len()
+    };
+    let around = Bounds {
+        west: -90.0,
+        south: 39.5,
+        east: -87.0,
+        north: 42.5,
+    };
+    let elsewhere = Bounds {
+        west: -80.0,
+        south: 39.5,
+        east: -79.0,
+        north: 42.5,
+    };
+    // Crosses the antimeridian: from 170° east to 80° west.
+    let wrapped = Bounds {
+        west: 170.0,
+        south: 39.5,
+        east: -80.0,
+        north: 42.5,
+    };
+    assert_eq!(count(&[&path], Some(around)), 4);
+    assert_eq!(count(&[&path], Some(elsewhere)), 0);
+    assert_eq!(count(&[&path], Some(wrapped)), 4);
+    // The same points from two overlapping regions are kept once.
+    assert_eq!(count(&[&path, &path], None), 4);
+}
+
+#[test]
 fn update_installs_replaces_and_keeps_only_stations() {
     let dir = TempDir::new();
     let store = PackageStore::new(&dir.0);

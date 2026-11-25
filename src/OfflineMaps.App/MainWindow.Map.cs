@@ -38,6 +38,7 @@ public sealed partial class MainWindow
         FocusMapItem.IsEnabled = CanUseMap;
         SaveMapImageItem.IsEnabled = CanSaveMapImage;
         ExportLibraryItem.IsEnabled = CanExportLibrary;
+        ImportLibraryItem.IsEnabled = CanImportLibrary;
     }
 
     private void FocusMap_Click(object sender, RoutedEventArgs e)
@@ -171,6 +172,27 @@ public sealed partial class MainWindow
         });
     }
 
+    /// <summary>The <c>bbox=west,south,east,north</c> query of a stations request, or null.</summary>
+    internal static OfflineMaps.Interop.Messages.Bounds? StationsArea(string query)
+    {
+        foreach (string pair in query.TrimStart('?').Split('&'))
+        {
+            if (!pair.StartsWith("bbox=", StringComparison.Ordinal))
+            {
+                continue;
+            }
+            string[] parts = Uri.UnescapeDataString(pair["bbox=".Length..]).Split(',');
+            var values = new double[4];
+            if (parts.Length != 4 || !parts.Select((p, i) => double.TryParse(p, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out values[i])).All(ok => ok))
+            {
+                throw new ArgumentException("The stations area is invalid.");
+            }
+            return new OfflineMaps.Interop.Messages.Bounds { West = values[0], South = values[1], East = values[2], North = values[3] };
+        }
+        return null;
+    }
+
     private static bool IsLocal(string uri) =>
         Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps && parsed.Host == Host;
 
@@ -241,7 +263,10 @@ public sealed partial class MainWindow
             }
             else
             {
-                string json = await Task.Run(core.StationsGeoJson);
+                // The page asks for the area around the view; every installed region's
+                // points at once would be too much to pass to it.
+                var area = StationsArea(new Uri(uri).Query);
+                string json = await Task.Run(() => core.StationsGeoJson(area));
                 body = System.Text.Encoding.UTF8.GetBytes(json);
                 type = "application/geo+json";
             }

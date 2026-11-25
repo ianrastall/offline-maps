@@ -55,7 +55,8 @@ class MapImport(
         check(manifest.getInt("schema") == 1 && region.matches(Regex("[a-z0-9]+(-[a-z0-9]+)*"))) { "Unknown transfer format." }
         val files = manifest.getJSONObject("files")
         val names = files.keys().asSequence().toList().sorted()
-        check(names.size in 4..13) { "Select a prepared region folder." }
+        // A whole region, or separate layers (such as terrain) for an installed one.
+        check(names.size in 3..13) { "Select a prepared region folder." }
         var total = 0L
         for (name in names) {
             check(name.startsWith("$region/") && name.split('/').all {

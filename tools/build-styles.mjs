@@ -12,7 +12,8 @@
 //   carry refs). Shield images are drawn by the map page on demand;
 // - fuel and charging stations and outdoor places (shelters, drinking water,
 //   campgrounds, toilets), which the tiles lack, come from a GeoJSON
-//   source (`/extras/stations.geojson`, served from the region's extras) and
+//   source that the map page fills for the area in view
+//   (`/extras/stations.geojson?bbox=`, served from the regions' extras) and
 //   are shown from zoom 11 with priority over street names and shields. The charging
 //   icon is drawn by the map page.
 import { createHash } from 'node:crypto';
@@ -186,7 +187,8 @@ function build(sourceName, outName, title, dark) {
     },
     [STATIONS]: {
       type: 'geojson',
-      data: '/extras/stations.geojson',
+      // Filled by the map page for the area in view (`/extras/stations.geojson?bbox=`).
+      data: { type: 'FeatureCollection', features: [] },
     },
   };
   style.layers = style.layers

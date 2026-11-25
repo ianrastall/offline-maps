@@ -126,7 +126,6 @@ fn read_journal(store: &PackageStore) -> Result<Option<Journal>, PackageError> {
         || crate::regions::find(&journal.region).is_none()
         || !(1..=4).contains(&journal.changes.len())
         || layers.len() != journal.changes.len()
-        || !layers.contains(&Layer::Map)
         || journal.changes.iter().any(|c| {
             !is_version_name(&c.version) || c.before.as_ref().is_some_and(|s| s.len() > 4096)
         })
@@ -275,16 +274,43 @@ pub fn install(
 ) -> Result<String, PackageError> {
     let _lock = store.lock("transfer")?;
     recover_locked(store)?;
-    let region = Transfer::read(staged)?.region;
-    if pointer_path(store, &region, Layer::Map).exists() && !replace {
+    let manifest = Transfer::read(staged)?;
+    let region = manifest.region.clone();
+    // Optional layers alone (such as terrain) go beside an installed map.
+    let layers_only = !manifest
+        .files
+        .contains_key(&format!("{region}/active.json"));
+    // A whole region replaces the installed map; layers alone, the same layers.
+    let replacing = |store: &PackageStore| {
+        if !layers_only {
+            return pointer_path(store, &region, Layer::Map).exists();
+        }
+        [Layer::Extras, Layer::Terrain, Layer::Overlays]
+            .into_iter()
+            .any(|layer| {
+                let listed = manifest
+                    .files
+                    .contains_key(&format!("{}/active.json", layer.id(&region)));
+                listed && pointer_path(store, &region, layer).exists()
+            })
+    };
+    if layers_only && !pointer_path(store, &region, Layer::Map).exists() {
+        return Err(invalid(
+            "Install the region's map before adding its separate layers.",
+        ));
+    }
+    if replacing(store) && !replace {
         return Err(invalid(
             "Review and confirm replacing the installed region first.",
         ));
     }
     verify(staged, cancelled)?;
     let source = PackageStore::new(staged);
-    let map = source.active(&region)?.expect("verified map");
-    let mut incoming = vec![(Layer::Map, map.path)];
+    let mut incoming = Vec::new();
+    if !layers_only {
+        let map = source.active(&region)?.expect("verified map");
+        incoming.push((Layer::Map, map.path));
+    }
     if let Some(v) = active_extras(&source, &region)? {
         incoming.push((Layer::Extras, v.path));
     }
@@ -298,10 +324,13 @@ pub fn install(
         .iter()
         .map(|(layer, _)| store.lock(&layer.id(&region)))
         .collect::<Result<_, _>>()?;
-    if pointer_path(store, &region, Layer::Map).exists() && !replace {
+    if replacing(store) && !replace {
         return Err(invalid(
             "The region was installed while the transfer was being checked. Review it again.",
         ));
+    }
+    if layers_only && !pointer_path(store, &region, Layer::Map).exists() {
+        return Err(invalid("The region's map was removed during the import."));
     }
     let time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

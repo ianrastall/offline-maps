@@ -11,8 +11,8 @@ android {
         applicationId = "io.github.ianrastall.offlinemaps"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.11.0"
+        versionCode = 14
+        versionName = "0.12.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
     buildFeatures { compose = true; buildConfig = true }

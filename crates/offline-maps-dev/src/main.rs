@@ -28,6 +28,9 @@
 //!       [--continent "North America"] [--country Japan] [--local <folder of .osm.pbf>]
 //!       (builds the prepared stations-and-addresses files published with the
 //!       releases, and manifest.json; skips regions already built there)
+//!   offline-maps-dev verify-transfer <region-folder>
+//!   offline-maps-dev import-library <store-dir> <library-folder>
+//!       (adds the regions and separate layers a library folder holds, as the apps do)
 //!
 //! `serve` binds 127.0.0.1 only and stands in for the WebView2 request
 //! interception the app will use: tiles come from the Rust core, every
@@ -288,6 +291,17 @@ fn main() -> ExitCode {
         Some("terrain-sources") => terrain_sources::run(&args[1..]),
         Some("prepare-extras") => {
             parse(&args[1..]).and_then(|(out, options)| prepare_extras::run(&out, &options))
+        }
+        Some("import-library") if args.len() == 3 => {
+            let store = offline_maps_core::store::PackageStore::new(std::path::Path::new(&args[1]));
+            offline_maps_core::library_import::import_library(
+                &store,
+                std::path::Path::new(&args[2]),
+                &AtomicBool::new(false),
+                |done, total, id| eprintln!("{done}/{total} {id}"),
+            )
+            .map(|result| println!("{result:#?}"))
+            .map_err(|e| e.to_string())
         }
         Some("verify-transfer") if args.len() == 2 => {
             offline_maps_core::transfer::verify(std::path::Path::new(&args[1]), &AtomicBool::new(false))

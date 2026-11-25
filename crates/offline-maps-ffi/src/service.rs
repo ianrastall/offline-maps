@@ -16,7 +16,7 @@ use offline_maps_core::download::{
     HttpTransport, Newer, Progress, UpdateError, UpdateOptions, UpdateOutcome, update_region,
 };
 use offline_maps_core::extras::{
-    ActiveExtras, ExtrasOutcome, active_extras, extras_id, prune_extras, stations_geojson_all,
+    ActiveExtras, ExtrasOutcome, active_extras, extras_id, prune_extras, stations_geojson_in,
     update_extras, update_extras_prepared,
 };
 use offline_maps_core::mbtiles::{Bounds, TileEncoding, TilePackage};
@@ -213,6 +213,40 @@ fn terrain_source_messages(region_id: &str) -> Vec<pb::TerrainSource> {
 
 fn overlaps(a: &Bounds, b: &Bounds) -> bool {
     a.west <= b.east && b.west <= a.east && a.south <= b.north && b.south <= a.north
+}
+
+/// A requested stations area with longitudes wrapped into -180 to 180; west
+/// exceeds east where it crosses the antimeridian.
+pub(crate) fn station_area(b: &pb::Bounds) -> Outcome<Bounds> {
+    let finite = [b.west, b.south, b.east, b.north]
+        .iter()
+        .all(|v| v.is_finite());
+    if !finite || b.west > b.east || b.south > b.north {
+        return Err(error(
+            ErrorKind::InvalidArgument,
+            "The stations area is invalid.",
+        ));
+    }
+    let (south, north) = (b.south.max(-90.0), b.north.min(90.0));
+    if b.east - b.west >= 360.0 {
+        return Ok(Bounds {
+            west: -180.0,
+            south,
+            east: 180.0,
+            north,
+        });
+    }
+    let west = (b.west + 180.0).rem_euclid(360.0) - 180.0;
+    let mut east = west + (b.east - b.west);
+    if east > 180.0 {
+        east -= 360.0;
+    }
+    Ok(Bounds {
+        west,
+        south,
+        east,
+        north,
+    })
 }
 
 fn decompress(z: u8, x: u32, y: u32, encoding: TileEncoding, data: Vec<u8>) -> Outcome<Vec<u8>> {
@@ -896,13 +930,37 @@ impl Service {
         Ok(pb::OverviewTile { data })
     }
 
-    pub fn stations(&self) -> Outcome<pb::Stations> {
+    pub fn stations(&self, request: &pb::GetStations) -> Outcome<pb::Stations> {
+        let area = request.area.as_ref().map(station_area).transpose()?;
         let slots = self.slots();
         let paths: Vec<&Path> = slots
             .iter()
+            .filter(|s| {
+                let Some(area) = &area else { return true };
+                let bounds = s.extras.as_ref().and_then(|x| x.record.bbox).or(s.bounds);
+                bounds.is_none_or(|b| {
+                    if area.west <= area.east {
+                        overlaps(&b, area)
+                    } else {
+                        overlaps(
+                            &b,
+                            &Bounds {
+                                east: 180.0,
+                                ..*area
+                            },
+                        ) || overlaps(
+                            &b,
+                            &Bounds {
+                                west: -180.0,
+                                ..*area
+                            },
+                        )
+                    }
+                })
+            })
             .filter_map(|s| s.extras.as_ref().map(|x| x.path.as_path()))
             .collect();
-        let geojson = stations_geojson_all(&paths).map_err(|e| {
+        let geojson = stations_geojson_in(&paths, area.as_ref()).map_err(|e| {
             error(
                 ErrorKind::InvalidData,
                 format!("Stations could not be read: {e}"),
@@ -1386,11 +1444,20 @@ impl Service {
             ..Default::default()
         })?
         .status();
-        Ok((
-            incoming,
-            bytes,
-            self.store.region_dir(&region).join("active.json").exists(),
-        ))
+        // A whole region replaces the installed map; separate layers (such as
+        // terrain), the same installed layers.
+        let layers_only = !manifest
+            .files
+            .contains_key(&format!("{region}/active.json"));
+        let replacing = if layers_only {
+            manifest
+                .files
+                .keys()
+                .any(|name| name.ends_with("/active.json") && self.store.root().join(name).exists())
+        } else {
+            self.store.region_dir(&region).join("active.json").exists()
+        };
+        Ok((incoming, bytes, replacing))
     }
 
     pub fn describe_export(&self, id: &str) -> Outcome<offline_maps_core::transfer::Transfer> {
@@ -1429,6 +1496,48 @@ impl Service {
         })?;
         Ok(pb::ExportLibraryResult {
             path: path.to_string_lossy().into_owned(),
+        })
+    }
+
+    /// Adds what a library folder holds that is not installed (see
+    /// [`offline_maps_core::library_import`]).
+    pub fn import_library(&self, source: &Path) -> Outcome<pb::ImportLibraryResult> {
+        let _busy = self.begin(pb::UpdateTarget::Map, None)?;
+        lock(&self.progress).phase = "Importing".into();
+        let outcome = offline_maps_core::library_import::import_library(
+            &self.store,
+            source,
+            &self.cancel,
+            |done, total, id| {
+                let mut progress = lock(&self.progress);
+                progress.done = done as u64;
+                progress.total = total as u64;
+                progress.region_name = offline_maps_core::regions::find(id)
+                    .map_or_else(|| id.to_owned(), |region| region.name.to_owned());
+            },
+        );
+        self.reload();
+        let result = outcome.map_err(|e| match e {
+            offline_maps_core::mbtiles::PackageError::Io(ref io)
+                if io.kind() == std::io::ErrorKind::Interrupted =>
+            {
+                error(ErrorKind::Cancelled, "Map import cancelled.")
+            }
+            offline_maps_core::mbtiles::PackageError::Io(_) => {
+                error(ErrorKind::Storage, e.to_string())
+            }
+            _ => error(ErrorKind::InvalidData, e.to_string()),
+        })?;
+        Ok(pb::ImportLibraryResult {
+            added: result.added,
+            layers_added: result.layers_added,
+            skipped: result.skipped as u32,
+            needs_map: result.needs_map,
+            failed: result
+                .failed
+                .into_iter()
+                .map(|(folder, reason)| pb::ImportFailure { folder, reason })
+                .collect(),
         })
     }
 

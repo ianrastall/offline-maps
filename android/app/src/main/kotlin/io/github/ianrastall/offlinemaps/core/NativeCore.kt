@@ -24,8 +24,11 @@ object NativeCore {
     /** A tile's bytes, empty where there is none. [kind] is one of the TILE_ constants. */
     @JvmStatic external fun tile(handle: Long, kind: Int, z: Int, x: Int, y: Int): ByteArray
 
-    /** Stations and outdoor places as a GeoJSON FeatureCollection. */
-    @JvmStatic external fun stations(handle: Long): String
+    /**
+     * Stations and outdoor places inside the area as a GeoJSON FeatureCollection;
+     * every installed one when the bounds are NaN.
+     */
+    @JvmStatic external fun stations(handle: Long, west: Double, south: Double, east: Double, north: Double): String
 
     @JvmStatic external fun close(handle: Long)
     @JvmStatic external fun searchJson(handle: Long, query: String, latitude: Double, longitude: Double): String

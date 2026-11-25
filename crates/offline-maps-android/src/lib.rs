@@ -214,17 +214,31 @@ pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_til
         .resolve::<ThrowRuntimeExAndDefault>()
 }
 
-/// Fuel and charging stations and outdoor places as a GeoJSON FeatureCollection.
+/// Fuel and charging stations and outdoor places inside the area (all of them
+/// when any bound is NaN) as a GeoJSON FeatureCollection.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_github_ianrastall_offlinemaps_core_NativeCore_stations<'local>(
     mut unowned: EnvUnowned<'local>,
     _class: JClass<'local>,
     handle: jlong,
+    west: jdouble,
+    south: jdouble,
+    east: jdouble,
+    north: jdouble,
 ) -> JObject<'local> {
     unowned
         .with_env(|env| -> Result<JObject<'local>> {
             let service = unsafe { service(handle) }?;
-            let geojson = service.stations()?.geojson;
+            let area = [west, south, east, north]
+                .iter()
+                .all(|v| !v.is_nan())
+                .then_some(pb::Bounds {
+                    west,
+                    south,
+                    east,
+                    north,
+                });
+            let geojson = service.stations(&pb::GetStations { area })?.geojson;
             text(env, &geojson)
         })
         .resolve::<ThrowRuntimeExAndDefault>()

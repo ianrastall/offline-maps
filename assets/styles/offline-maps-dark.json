@@ -24,7 +24,10 @@
   },
   "stations": {
    "type": "geojson",
-   "data": "/extras/stations.geojson"
+   "data": {
+    "type": "FeatureCollection",
+    "features": []
+   }
   }
  },
  "layers": [
